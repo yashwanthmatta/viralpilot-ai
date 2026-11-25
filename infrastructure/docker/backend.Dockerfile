@@ -1,5 +1,5 @@
 # One image for the API, the worker and the static dashboard.
-FROM node:22-alpine AS web
+FROM node:26-alpine AS web
 WORKDIR /web
 COPY apps/web/package.json apps/web/package-lock.json* ./
 RUN npm ci
