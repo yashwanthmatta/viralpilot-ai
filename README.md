@@ -56,7 +56,7 @@ quality-check, publish and learn without a browser or laptop being on.
 How the pipeline survives failures: [docs/architecture.md](docs/architecture.md).
 Platform approval requirements: [PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md).
 Money: [REVENUE_STRATEGY.md](REVENUE_STRATEGY.md) · [BUSINESS_REVIEW.md](BUSINESS_REVIEW.md).
-Proof: [TEST_RESULTS.md](TEST_RESULTS.md) · Hosting and cost: [DEPLOYMENT.md](DEPLOYMENT.md).
+Proof: [TEST_RESULTS.md](TEST_RESULTS.md) · Hosting: [FREE_MODE.md](FREE_MODE.md) ($0) or [DEPLOYMENT.md](DEPLOYMENT.md) (≈ $33.50/month, faster).
 
 ## Run it locally
 

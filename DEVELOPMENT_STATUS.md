@@ -34,8 +34,8 @@ that use fake adapters prove our own safety logic only.
 
 ### Latest local test results
 
-- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **114 passed**
-- `pytest tests/unit` on SQLite: **112 passed**
+- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **116 passed**
+- `pytest tests/unit` on SQLite: **114 passed**
 - Alembic upgrade → downgrade → upgrade and `alembic check` on PostgreSQL 16: clean
 - `ruff check .`: clean · `bandit`: no issues · `pip-audit`: no known vulnerabilities
 - `npm run lint`, `typecheck`, `build`: pass · `npm audit --omit=dev`: 0 vulnerabilities
@@ -101,6 +101,10 @@ that use fake adapters prove our own safety logic only.
 | Confirmed only when Meta reports `publish_status = published`; still-processing reels are re-checked | done | `test_facebook.py` |
 | Reel metrics (plays, comments, shares) | done | `test_facebook.py` |
 | A real reel on a real Page | **not done**: needs your Meta app and Page | — |
+
+## Free mode ($0): done
+
+GitHub Actions scheduled batch worker (`vp_worker.batch`, `.github/workflows/autopilot.yml`), Neon Postgres, media in the Actions cache, dashboard on Render's free plan or locally, rules writer instead of paid AI. See [FREE_MODE.md](FREE_MODE.md). Tested by `test_batch.py`.
 
 ## Remaining phases
 

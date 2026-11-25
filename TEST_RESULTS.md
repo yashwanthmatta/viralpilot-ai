@@ -27,8 +27,8 @@ platform accepts the request; the first real upload is the proof.
 
 | Suite | Result |
 |---|---|
-| `pytest tests` on PostgreSQL 16 + Redis + a real Celery worker process | **114 passed** |
-| `pytest tests/unit` on SQLite | **112 passed** |
+| `pytest tests` on PostgreSQL 16 + Redis + a real Celery worker process | **116 passed** |
+| `pytest tests/unit` on SQLite | **114 passed** |
 | `alembic upgrade head` → `downgrade 0003` → `upgrade head` → `alembic check` on PostgreSQL 16 | clean |
 | `ruff check .` | clean |
 | `bandit -r packages apps/api apps/worker` | no issues |
@@ -61,3 +61,12 @@ POST /api/autopilot/stop            200 {"enabled":false}
 
 Status reported $0.00 spend against $3.00 / $90.00 / $100.00 limits and $0.00
 confirmed and pending revenue, which is correct: nothing was spent or earned.
+
+## Free-tier batch mode
+
+- `test_batch.py`: one batch run transcribes and clips a real FFmpeg-made
+  video inline (no Redis). The next run renders, QCs and writes metadata, then
+  parks the job until an account is connected.
+- `python -m vp_worker.batch --max-seconds 60` against PostgreSQL with Redis
+  pointed at a closed port finished in about 1 s: `{"ticks": 1, "outcomes": {}}`.
+  This shows the free mode doesn't need Redis.

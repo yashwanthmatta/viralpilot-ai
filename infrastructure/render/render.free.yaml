@@ -1,0 +1,31 @@
+# $0 layout: dashboard + API on Render's FREE web service plan; the worker
+# runs on free GitHub Actions (.github/workflows/autopilot.yml); the database
+# is a free Neon Postgres. NOT applied automatically.
+#
+# Free web services sleep after ~15 idle minutes and take up to a minute to
+# wake. That only affects the dashboard and the OAuth callback; publishing
+# runs on GitHub Actions and doesn't need this service awake.
+services:
+  - type: web
+    name: viralpilot-dashboard
+    runtime: docker
+    dockerfilePath: ./infrastructure/docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: sh -c 'uvicorn vp_api.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers'
+    plan: free
+    healthCheckPath: /healthz
+    autoDeploy: false
+    envVars:
+      - { key: APP_ENV, value: production }
+      - { key: DATABASE_URL, sync: false }        # the same Neon URL as the GitHub secret
+      - { key: ADMIN_PASSWORD_HASH, sync: false }
+      - { key: SECRET_KEY, sync: false }
+      - { key: CREDENTIALS_KEY, sync: false }     # the same value as the GitHub secret
+      - { key: PUBLIC_API_URL, sync: false }      # https://viralpilot-dashboard.onrender.com
+      - { key: WEB_ORIGIN, sync: false }          # same as PUBLIC_API_URL
+      - { key: GOOGLE_CLIENT_ID, sync: false }
+      - { key: GOOGLE_CLIENT_SECRET, sync: false }
+      - { key: META_APP_ID, sync: false }
+      - { key: META_APP_SECRET, sync: false }
+      - { key: WHOP_ACCESS_TOKEN, sync: false }
+      - { key: SUPERVISOR_INTERVAL_S, value: "10800" }  # the worker ticks every 3 h in free mode

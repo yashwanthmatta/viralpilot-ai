@@ -1,0 +1,81 @@
+# Free-tier autopilot: runs the pipeline on GitHub's free runners on a
+# schedule, against a free Postgres (e.g. Neon). No always-on server.
+#
+# Does nothing until you add the DATABASE_URL secret and press START
+# AUTOPILOT in the dashboard. Minutes: a private repo gets 2,000 free
+# minutes/month; one run is ~2-4 min when idle, ~4 min more per video.
+# Every 3 hours = 8 runs/day ≈ 700-1,100 min/month at 3 videos/day.
+name: Autopilot (free tier)
+
+on:
+  schedule:
+    - cron: "23 */3 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: autopilot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CREDENTIALS_KEY: ${{ secrets.CREDENTIALS_KEY }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      META_APP_ID: ${{ secrets.META_APP_ID }}
+      META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+      PUBLIC_API_URL: ${{ secrets.PUBLIC_API_URL }}
+      WHOP_ACCESS_TOKEN: ${{ secrets.WHOP_ACCESS_TOKEN }}
+      OPERATOR_COUNTRY: ${{ secrets.OPERATOR_COUNTRY }}
+      CAMPAIGN_FEED_URLS: ${{ secrets.CAMPAIGN_FEED_URLS }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # optional: leave unset for $0 (rules writer)
+      APP_ENV: production
+      MEDIA_DIR: ${{ github.workspace }}/.media
+      WHISPER_MODEL: base.en
+      SUPERVISOR_INTERVAL_S: "10800"
+    steps:
+      - name: Skip when not configured
+        id: cfg
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "DATABASE_URL secret not set; nothing to do."; echo "ok=false" >> "$GITHUB_OUTPUT"; else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ok == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.cfg.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install FFmpeg and the app
+        if: steps.cfg.outputs.ok == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core >/dev/null
+          pip install -q ".[ml]"
+      - name: Restore media and model cache
+        if: steps.cfg.outputs.ok == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .media
+            ~/.cache/huggingface
+          key: vp-media-${{ github.run_id }}
+          restore-keys: vp-media-
+      - name: Migrate database
+        if: steps.cfg.outputs.ok == 'true'
+        run: alembic upgrade head
+      - name: Run one batch
+        if: steps.cfg.outputs.ok == 'true'
+        run: python -m vp_worker.batch --max-seconds 1500
+      - name: Save media and model cache
+        if: always() && steps.cfg.outputs.ok == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .media
+            ~/.cache/huggingface
+          key: vp-media-${{ github.run_id }}

@@ -4,10 +4,10 @@ Only things the system genuinely cannot do for you. Everything else is automated
 
 ## Now (to run it in the cloud)
 
-1. **Approve hosting spend.** Nothing has been deployed or purchased. The
-   recommended setup is one Render service running everything, about
-   **$33.50/month** fixed plus about $0.03 of AI per video. Details and the
-   trade-offs are in [DEPLOYMENT.md](DEPLOYMENT.md).
+1. **Pick hosting.** Free: GitHub Actions + Neon + Render free plan, $0
+   (see [FREE_MODE.md](FREE_MODE.md) for the shortest setup and the trade-offs).
+   Paid: one Render service, about $33.50/month, faster and always on
+   ([DEPLOYMENT.md](DEPLOYMENT.md)). Nothing has been deployed or purchased.
 2. **Create the secrets** (on your machine, never in git):
    `python scripts/gen_secrets.py` and `python scripts/hash_password.py`, then
    enter them as secret env vars on the host.
