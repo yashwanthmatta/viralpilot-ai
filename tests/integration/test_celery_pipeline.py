@@ -84,11 +84,11 @@ def _wait(pred, timeout=30):
     return False
 
 
-def test_real_queue_runs_pipeline_until_unbuilt_stage(env, feed_server):
+def test_real_queue_imports_and_hands_off_to_transcription(env, feed_server):
     from vp_agents import supervisor
     from vp_shared import db
     from vp_shared.events import set_autopilot
-    from vp_shared.models import ContentItem, ItemStage, Job, JobStatus, LicenseType, Source, SourceKind
+    from vp_shared.models import ContentItem, ItemStage, Job, LicenseType, Source, SourceKind
 
     with db.session_scope() as s:
         s.add(Source(name="local", kind=SourceKind.rss, url=f"http://127.0.0.1:{feed_server}/rss",
@@ -106,11 +106,11 @@ def test_real_queue_runs_pipeline_until_unbuilt_stage(env, feed_server):
 
         assert tick_until(lambda: stage_is(ItemStage.imported)), "item was not imported via Celery"
 
-        def transcribe_blocked():
+        def transcription_queued():
             with db.session_scope() as s:
-                return s.query(Job).filter_by(kind="transcribe.item", status=JobStatus.blocked).count() == 1
+                return s.query(Job).filter_by(kind="transcribe.item").count() == 1
 
-        assert tick_until(transcribe_blocked)
+        assert tick_until(transcription_queued)
     finally:
         w.send_signal(signal.SIGTERM)
         w.wait(20)

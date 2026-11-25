@@ -13,9 +13,6 @@ from vp_shared.models import Job
 from . import stage
 
 PENDING_STAGES = {
-    "transcribe.item": ("Phase 2", "Transcription (faster-whisper, cached per file)"),
-    "clip.item": ("Phase 3", "Clip finding and ranking"),
-    "edit.clip": ("Phase 3", "Vertical editing and rendering (ffmpeg)"),
     "qc.clip": ("Phase 4", "Automated quality control"),
     "metadata.clip": ("Phase 4", "Titles, descriptions and hashtags"),
     "analytics.publication": ("Phase 5", "Performance metrics collection"),

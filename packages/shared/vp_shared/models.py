@@ -173,8 +173,25 @@ class Clip(Base):
     title: Mapped[str] = mapped_column(String(300), default="")
     description: Mapped[str] = mapped_column(Text, default="")
     hashtags: Mapped[list] = mapped_column(JSON, default=list)
+    features: Mapped[dict] = mapped_column(JSON, default=dict)     # clip-scoring inputs (explainability)
+    transcript_text: Mapped[str] = mapped_column(Text, default="")
+    edit_plan: Mapped[dict] = mapped_column(JSON, default=dict)
+    cover_path: Mapped[str] = mapped_column(String(1000), default="")
+    duration_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     item: Mapped[ContentItem] = relationship()
+
+
+class TranscriptCache(Base):
+    """Transcripts keyed by media SHA-256: never transcribe the same file twice."""
+
+    __tablename__ = "transcripts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    content_sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    model: Mapped[str] = mapped_column(String(100))
+    language: Mapped[str] = mapped_column(String(16), default="")
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class PublicationStatus(str, enum.Enum):

@@ -25,6 +25,6 @@ def stage(kind: str) -> Callable[[Handler], Handler]:
 
 
 def load_all() -> dict[str, Handler]:
-    from . import acquisition, not_yet_built, publishing  # noqa: F401
+    from . import acquisition, not_yet_built, publishing, video  # noqa: F401
 
     return REGISTRY
