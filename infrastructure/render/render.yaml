@@ -23,9 +23,12 @@ services:
       - { key: SECRET_KEY, sync: false }
       - { key: CREDENTIALS_KEY, sync: false }
       - { key: WEB_ORIGIN, sync: false }
-      - { key: DAILY_LIMIT_USD, value: "5" }
-      - { key: MONTHLY_LIMIT_USD, value: "60" }
+      - { key: DAILY_LIMIT_USD, value: "3" }
+      - { key: MONTHLY_LIMIT_USD, value: "90" }
+      - { key: TOTAL_LIMIT_USD, value: "100" }
+      - { key: PER_VIDEO_LIMIT_USD, value: "0.50" }
       - { key: MAX_VIDEOS_PER_DAY, value: "3" }
+      - { key: MAX_VIDEOS_CEILING, value: "5" }
 
   - type: worker
     name: viralpilot-worker
@@ -45,9 +48,16 @@ services:
         fromService: { type: keyvalue, name: viralpilot-queue, property: connectionString }
       - { key: CREDENTIALS_KEY, sync: false }
       - { key: MEDIA_DIR, value: /data/media }
-      - { key: DAILY_LIMIT_USD, value: "5" }
-      - { key: MONTHLY_LIMIT_USD, value: "60" }
+      - { key: DAILY_LIMIT_USD, value: "3" }
+      - { key: MONTHLY_LIMIT_USD, value: "90" }
+      - { key: TOTAL_LIMIT_USD, value: "100" }
+      - { key: PER_VIDEO_LIMIT_USD, value: "0.50" }
       - { key: MAX_VIDEOS_PER_DAY, value: "3" }
+      - { key: MAX_VIDEOS_CEILING, value: "5" }
+      - { key: WHOP_ACCESS_TOKEN, sync: false }
+      - { key: OPERATOR_COUNTRY, sync: false }
+      - { key: CAMPAIGN_FEED_URLS, sync: false }
+      - { key: MAX_ACTIVE_CAMPAIGNS, value: "3" }
 
   - type: keyvalue
     name: viralpilot-queue

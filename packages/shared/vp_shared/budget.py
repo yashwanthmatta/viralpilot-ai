@@ -42,6 +42,9 @@ def get_budget(s: Session, *, lock: bool = False) -> BudgetSettings:
             daily_limit_usd=cfg.default_daily_limit_usd,
             monthly_limit_usd=cfg.default_monthly_limit_usd,
             max_videos_per_day=cfg.default_max_videos_per_day,
+            per_item_limit_usd=cfg.default_per_video_limit_usd,
+            total_limit_usd=cfg.default_total_limit_usd,
+            max_videos_ceiling=cfg.default_max_videos_ceiling,
         )
         s.add(row)
         s.flush()
@@ -56,13 +59,13 @@ def _month_start(now: datetime) -> datetime:
     return _day_start(now).replace(day=1)
 
 
-def _spent(s: Session, since: datetime, item_id: int | None = None) -> float:
+def _spent(s: Session, since: datetime | None, item_id: int | None = None) -> float:
     q = select(func.coalesce(func.sum(CostEntry.amount_usd), 0.0)).where(
         CostEntry.status != CostEntryStatus.released,
     )
     if item_id is not None:
         q = q.where(CostEntry.item_id == item_id)
-    else:
+    elif since is not None:
         q = q.where(CostEntry.created_at >= since)
     return float(s.execute(q).scalar_one())
 
@@ -73,6 +76,8 @@ class SpendSummary:
     month: float
     daily_limit: float
     monthly_limit: float
+    total: float = 0.0
+    total_limit: float = 0.0
 
     @property
     def daily_exhausted(self) -> bool:
@@ -81,6 +86,10 @@ class SpendSummary:
     @property
     def monthly_exhausted(self) -> bool:
         return self.month >= self.monthly_limit
+
+    @property
+    def total_exhausted(self) -> bool:
+        return self.total >= self.total_limit
 
 
 def summary(s: Session, now: datetime | None = None) -> SpendSummary:
@@ -91,6 +100,8 @@ def summary(s: Session, now: datetime | None = None) -> SpendSummary:
         month=_spent(s, _month_start(now)),
         daily_limit=b.daily_limit_usd,
         monthly_limit=b.monthly_limit_usd,
+        total=_spent(s, None),
+        total_limit=b.total_limit_usd,
     )
 
 
@@ -114,6 +125,9 @@ def reserve(
     month = _spent(s, _month_start(now)) + estimate_usd
     if month > b.monthly_limit_usd + 1e-9:
         raise BudgetExceeded("monthly", b.monthly_limit_usd, month)
+    total = _spent(s, None) + estimate_usd
+    if total > b.total_limit_usd + 1e-9:
+        raise BudgetExceeded("total", b.total_limit_usd, total)
     if item_id is not None:
         per_item = _spent(s, now, item_id=item_id) + estimate_usd
         if per_item > b.per_item_limit_usd + 1e-9:

@@ -21,6 +21,7 @@ function Meter({ value, max }: { value: number; max: number }) {
 export default function CommandCenter() {
   const { data: st, error, reload } = useApi<Status>("/api/status", 10000);
   const { data: decisions } = useApi<Decision[]>("/api/decisions?limit=8", 10000);
+  const r = st?.revenue;
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
 
@@ -73,6 +74,15 @@ export default function CommandCenter() {
         )}
       </Card>
 
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <Stat label="Confirmed today" value={r ? usd(r.confirmed_today) : "–"} hint="verified payouts only" />
+        <Stat label="Confirmed this month" value={r ? usd(r.confirmed_month) : "–"} hint={r?.next_milestone ? `next milestone ${usd(r.next_milestone)}` : undefined} />
+        <Stat label="Pending" value={r ? usd(r.pending) : "–"} hint="approved, not yet paid" />
+        <Stat label="Net this month" value={r ? usd(r.net_month_confirmed) : "–"} hint="confirmed minus spend" />
+        <Stat label="Progress to $100k/mo" value={r ? `${(r.progress_to_100k * 100).toFixed(3)}%` : "–"} />
+        <Stat label="Active campaigns" value={r?.active_campaigns ?? "–"} />
+      </div>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
         <Stat label="Discovered" value={c?.discovered ?? "–"} hint={c ? `${c.rights_rejected} rejected on rights` : undefined} />
         <Stat label="Analyzed" value={c?.analyzed ?? "–"} hint={c ? `${c.imported} imported` : undefined} />
@@ -80,7 +90,6 @@ export default function CommandCenter() {
         <Stat label="Scheduled" value={c?.scheduled ?? "–"} />
         <Stat label="Published" value={c?.published ?? "–"} hint="platform-confirmed only" />
         <Stat label="Total views" value={c ? c.total_views.toLocaleString() : "–"} hint="from platform metrics" />
-        <Stat label="Revenue" value={st ? (st.revenue === null ? "n/a" : usd(st.revenue)) : "–"} hint={st?.revenue === null ? "no revenue API connected" : undefined} />
         <Stat label="Errors auto-resolved" value={c?.errors_auto_recovered ?? "–"} />
         <Stat label="Jobs queued" value={c ? c.jobs_pending + c.jobs_running : "–"} hint={c ? `${c.jobs_blocked} waiting on blockers` : undefined} />
         <Stat label="Dead-lettered" value={c?.jobs_failed ?? "–"} />
@@ -99,6 +108,10 @@ export default function CommandCenter() {
                 <div>
                   <div className="flex justify-between text-sm"><span>This month</span><span className="tabular-nums">{usd(st.spend.month)} / {usd(st.spend.monthly_limit)}</span></div>
                   <Meter value={st.spend.month} max={st.spend.monthly_limit} />
+                </div>
+                <div>
+                  <div className="flex justify-between text-sm"><span>Lifetime cap</span><span className="tabular-nums">{usd(st.spend.total)} / {usd(st.spend.total_limit)}</span></div>
+                  <Meter value={st.spend.total} max={st.spend.total_limit} />
                 </div>
                 <p className="text-xs text-muted">Max {st.spend.max_videos_per_day} unique videos/day · {usd(st.spend.per_video_limit)} per video</p>
               </>

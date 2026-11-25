@@ -51,6 +51,12 @@ export default function Settings() {
               <Field label="Unique videos per day" hint="Spread across eligible platforms.">
                 <Input type="number" min={0} max={50} value={form.max_videos_per_day} onChange={(e) => setForm({ ...form, max_videos_per_day: Number(e.target.value) })} />
               </Field>
+              <Field label="Lifetime spend cap (USD)" hint="Autopilot stops spending once total spend reaches this.">
+                <Input type="number" step="0.01" min={0} value={form.total_limit_usd} onChange={(e) => setForm({ ...form, total_limit_usd: Number(e.target.value) })} />
+              </Field>
+              <Field label="Scaling ceiling (videos/day)" hint="The scaling engine never raises the daily count above this.">
+                <Input type="number" min={0} max={200} value={form.max_videos_ceiling} onChange={(e) => setForm({ ...form, max_videos_ceiling: Number(e.target.value) })} />
+              </Field>
               <div className="flex items-center gap-3 md:col-span-2">
                 <Button type="submit">Save limits</Button>
                 {msg && <span className="text-sm text-go">{msg}</span>}

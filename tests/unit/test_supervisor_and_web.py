@@ -39,10 +39,13 @@ def test_tick_schedules_and_dispatches_when_running(fresh_db):
     _add_source()
     start_autopilot()
     r = supervisor.tick()
-    assert r["discovery_jobs"] == 1 and len(fresh_db) == 1
-    assert supervisor.tick()["discovery_jobs"] == 0  # same interval: no duplicate
+    # source poll + campaign scan; plus the once-a-day strategy run
+    assert r["discovery_jobs"] == 2 and len(fresh_db) == 3
+    assert supervisor.tick()["discovery_jobs"] == 0  # same interval: no duplicates
     with db.session_scope() as s:
         assert s.query(Job).filter_by(kind="discover.source").count() == 1
+        assert s.query(Job).filter_by(kind="discover.campaigns").count() == 1
+        assert s.query(Job).filter_by(kind="strategy.daily").count() == 1
 
 
 def test_tick_reports_missing_setup():
@@ -86,7 +89,7 @@ def test_start_requires_source_then_start_stop(client):
     assert r.status_code == 201
     assert client.post("/api/autopilot/start", headers=CSRF).status_code == 200
     st = client.get("/api/status").json()
-    assert st["autopilot"]["enabled"] is True and st["revenue"] is None
+    assert st["autopilot"]["enabled"] is True and st["revenue"]["confirmed_month"] == 0 and st["revenue"]["pending"] == 0
     client.post("/api/autopilot/stop", headers=CSRF)
     assert client.get("/api/status").json()["autopilot"]["enabled"] is False
 

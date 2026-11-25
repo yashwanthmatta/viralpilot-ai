@@ -28,6 +28,18 @@ Only things the system genuinely cannot do for you. Everything else is automated
    dashboard limits regardless.
 6. **Cloudflare R2 (or S3) bucket** and access keys for rendered videos.
 
+## Paid campaigns (optional, any time)
+
+7a. **Whop:** to discover and submit to Whop clipping bounties automatically,
+    create a Whop OAuth app, authorize it on your own Whop account with the
+    scopes `bounty:basic:read` and `bounty:submission:create`, and set the
+    token as the secret `WHOP_ACCESS_TOKEN`. Without it, add campaigns by hand.
+7b. **`OPERATOR_COUNTRY`:** the ISO code of the country you are paid in, so
+    geo-restricted campaigns are skipped.
+7c. **Content Rewards / Vyro:** no public clipper API. Join campaigns on their
+    sites, add them on the Paid campaigns page, and submit the clips the
+    dashboard queues for you.
+
 ## Before publishing (phase 4)
 
 7. **YouTube:** create a Google Cloud project, enable YouTube Data API v3,
@@ -37,4 +49,4 @@ Only things the system genuinely cannot do for you. Everything else is automated
    linked to a Facebook Page, App Review for publishing permissions.
 9. **TikTok:** TikTok for Developers app and Content Posting API audit.
 
-See [docs/platform-blockers.md](docs/platform-blockers.md) for what each one involves.
+See [PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md) for what each one involves.

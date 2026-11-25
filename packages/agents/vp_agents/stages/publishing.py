@@ -42,6 +42,10 @@ def _mark_published(s: Session, pub: Publication, conf: vp_publishing.Confirmati
     pub.confirmed_at = now_utc()
     pub.error = ""
     decide(s, AGENT, "published", f"{pub.platform} post {conf.platform_post_id}", clip_id=pub.clip_id)
+    if pub.campaign_id:
+        from vp_agents.campaigns import create_submission
+
+        create_submission(s, pub, pub.campaign_id)
 
 
 @stage("publish.publication")

@@ -43,3 +43,17 @@ def test_per_item_limit(s):
 def test_negative_estimate_rejected(s):
     with pytest.raises(ValueError):
         budget.reserve(s, category="llm", estimate_usd=-1)
+
+
+def test_lifetime_cap(s):
+    b = budget.get_budget(s)
+    b.total_limit_usd = 0.5
+    budget.reserve(s, category="llm", estimate_usd=0.4)
+    with pytest.raises(budget.BudgetExceeded) as ei:
+        budget.reserve(s, category="llm", estimate_usd=0.2)
+    assert ei.value.scope == "total"
+
+
+def test_spec_defaults(s, monkeypatch):
+    b = budget.get_budget(s)
+    assert (b.per_item_limit_usd, b.total_limit_usd, b.max_videos_per_day, b.max_videos_ceiling) == (0.5, 100.0, 3, 5)

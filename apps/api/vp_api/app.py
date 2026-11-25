@@ -20,6 +20,9 @@ from vp_shared.events import autopilot, decide, set_autopilot
 from vp_shared.models import (
     AgentDecision,
     AuditLog,
+    Campaign,
+    CampaignStatus,
+    CampaignSubmission,
     Clip,
     ClipStage,
     ContentItem,
@@ -33,9 +36,12 @@ from vp_shared.models import (
     MetricSnapshot,
     Publication,
     PublicationStatus,
+    RevenueEntry,
+    RevenueStatus,
     SocialAccount,
     Source,
     SourceKind,
+    SubmissionStatus,
 )
 
 from vp_api.security import (
@@ -133,6 +139,16 @@ def me() -> dict:
     return {"user": "owner"}
 
 
+def _revenue_status(s) -> dict:
+    from vp_analytics import finance
+    o = finance.overview(s)
+    active = _count(s, Campaign, Campaign.status == CampaignStatus.active)
+    return {"confirmed_today": o["confirmed_today"], "confirmed_month": o["confirmed_month"],
+            "pending": o["pending"], "net_month_confirmed": o["net_month_confirmed"],
+            "progress_to_100k": o["progress_to_100k"], "next_milestone": o["next_milestone"],
+            "active_campaigns": active}
+
+
 @app.get("/api/status", dependencies=auth)
 def status_snapshot() -> dict:
     with db.session_scope() as s:
@@ -178,8 +194,10 @@ def status_snapshot() -> dict:
                 "today": round(spend.today, 4), "daily_limit": spend.daily_limit,
                 "month": round(spend.month, 4), "monthly_limit": spend.monthly_limit,
                 "per_video_limit": b.per_item_limit_usd, "max_videos_per_day": b.max_videos_per_day,
+                "total": round(spend.total, 4), "total_limit": spend.total_limit,
             },
-            "revenue": None,  # no revenue API integrated yet: shown as unavailable, never estimated
+            # Verified ledger only: confirmed and pending are kept apart, nothing is estimated here.
+            "revenue": _revenue_status(s),
             "blockers": [
                 {"key": x.key, "title": x.title, "detail": x.detail, "since": _iso(x.first_seen_at)}
                 for x in s.execute(select(IntegrationBlocker).where(IntegrationBlocker.resolved.is_(False))
@@ -290,8 +308,11 @@ def audit_log(limit: int = 100) -> list[dict]:
 @app.post("/api/autopilot/start", dependencies=auth)
 def start(request: Request) -> dict:
     with db.session_scope() as s:
-        if _count(s, Source, Source.enabled.is_(True)) == 0:
-            raise HTTPException(400, "Add at least one authorised source before starting autopilot.")
+        from vp_agents.campaigns import ADAPTERS
+
+        has_campaigns = _count(s, Campaign) > 0 or any(a.configured() for a in ADAPTERS)
+        if _count(s, Source, Source.enabled.is_(True)) == 0 and not has_campaigns:
+            raise HTTPException(400, "Add an authorised source or a paid campaign before starting autopilot.")
         set_autopilot(s, True, "started from dashboard")
         audit(s, request, "autopilot_start")
     return {"enabled": True}
@@ -421,6 +442,8 @@ class BudgetIn(BaseModel):
     monthly_limit_usd: float = Field(ge=0, le=20000)
     per_item_limit_usd: float = Field(ge=0, le=100)
     max_videos_per_day: int = Field(ge=0, le=50)
+    total_limit_usd: float = Field(default=100.0, ge=0, le=1_000_000)
+    max_videos_ceiling: int = Field(default=5, ge=0, le=200)
 
 
 @app.get("/api/budget", dependencies=auth)
@@ -428,7 +451,8 @@ def get_budget() -> dict:
     with db.session_scope() as s:
         b = budget.get_budget(s)
         return {"daily_limit_usd": b.daily_limit_usd, "monthly_limit_usd": b.monthly_limit_usd,
-                "per_item_limit_usd": b.per_item_limit_usd, "max_videos_per_day": b.max_videos_per_day}
+                "per_item_limit_usd": b.per_item_limit_usd, "max_videos_per_day": b.max_videos_per_day,
+                "total_limit_usd": b.total_limit_usd, "max_videos_ceiling": b.max_videos_ceiling}
 
 
 @app.put("/api/budget", dependencies=auth)
@@ -437,6 +461,7 @@ def put_budget(body: BudgetIn, request: Request) -> dict:
         b = budget.get_budget(s, lock=True)
         b.daily_limit_usd, b.monthly_limit_usd = body.daily_limit_usd, body.monthly_limit_usd
         b.per_item_limit_usd, b.max_videos_per_day = body.per_item_limit_usd, body.max_videos_per_day
+        b.total_limit_usd, b.max_videos_ceiling = body.total_limit_usd, max(body.max_videos_ceiling, body.max_videos_per_day)
         decide(s, "Cost Optimization Specialist", "limits_changed", str(body.model_dump()))
         audit(s, request, "budget_changed", str(body.model_dump()))
     return body.model_dump()
@@ -451,3 +476,194 @@ def platforms() -> list[dict]:
         av = adapter.availability(SocialAccount(platform=p)) if adapter else None
         out.append({"platform": p, "available": bool(av and av.ok), "reason": av.reason if av else "no adapter"})
     return out
+
+
+# --------------------------------------------------------------- campaigns
+
+class CampaignIn(BaseModel):
+    """Manual entry for marketplaces without an API (Content Rewards, Vyro) and direct deals."""
+
+    provider: Literal["content_rewards", "vyro", "direct", "whop_manual", "other"]
+    external_id: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=300)
+    creator: str = Field(default="", max_length=200)
+    url: HttpUrl
+    payout_model: Literal["cpm", "flat"] = "cpm"
+    rate_per_1k: float | None = Field(default=None, ge=0, le=100)
+    flat_reward: float | None = Field(default=None, ge=0, le=100000)
+    budget_total: float | None = Field(default=None, ge=0)
+    budget_remaining: float | None = Field(default=None, ge=0)
+    min_payout: float | None = Field(default=None, ge=0)
+    max_payout_per_video: float | None = Field(default=None, ge=0)
+    platform_fee_pct: float = Field(default=0.0, ge=0, le=1)
+    ends_at: str | None = None
+    platforms: list[Literal["youtube", "facebook", "instagram", "tiktok", "x", "other"]] = []
+    countries: list[str] = []
+    requirements: str = Field(min_length=1, max_length=20000)
+    footage_urls: list[HttpUrl] = []
+    rights_note: str = Field(default="", max_length=2000)
+
+
+def _campaign_row(c: Campaign, subs: dict | None = None) -> dict:
+    return {"id": c.id, "provider": c.provider, "external_id": c.external_id, "name": c.name, "creator": c.creator,
+            "url": c.url, "payout_model": c.payout_model, "rate_per_1k": c.rate_per_1k, "flat_reward": c.flat_reward,
+            "budget_total": c.budget_total, "budget_remaining": c.budget_remaining, "min_payout": c.min_payout,
+            "max_payout_per_video": c.max_payout_per_video, "platform_fee_pct": c.platform_fee_pct,
+            "ends_at": _iso(c.ends_at), "platforms": c.platforms, "countries": c.countries,
+            "requirements": c.requirements, "footage_urls": c.footage_urls, "submission_method": c.submission_method,
+            "status": c.status.value, "status_reason": c.status_reason, "evaluation": c.evaluation,
+            "submissions": (subs or {}).get(c.id, {}), "last_seen_at": _iso(c.last_seen_at)}
+
+
+@app.get("/api/campaigns", dependencies=auth)
+def list_campaigns() -> list[dict]:
+    with db.session_scope() as s:
+        subs: dict = {}
+        for cid, st, n in s.execute(select(CampaignSubmission.campaign_id, CampaignSubmission.status, func.count())
+                                    .group_by(CampaignSubmission.campaign_id, CampaignSubmission.status)).all():
+            subs.setdefault(cid, {})[st.value] = n
+        rows = s.execute(select(Campaign)).scalars().all()
+        rows.sort(key=lambda c: (c.status not in (CampaignStatus.active, CampaignStatus.eligible),
+                                 -(c.evaluation or {}).get("expected_profit", -1e9)))
+        return [_campaign_row(c, subs) for c in rows]
+
+
+@app.post("/api/campaigns", dependencies=auth, status_code=201)
+def add_campaign(body: CampaignIn, request: Request) -> dict:
+    from datetime import datetime
+
+    from vp_agents import campaigns as cmp
+
+    data = body.model_dump()
+    data["url"] = str(body.url)
+    data["footage_urls"] = [str(u) for u in body.footage_urls]
+    try:
+        data["ends_at"] = datetime.fromisoformat(body.ends_at) if body.ends_at else None
+    except ValueError as e:
+        raise HTTPException(422, "ends_at must be ISO 8601") from e
+    data["submission_method"] = "manual"
+    with db.session_scope() as s:
+        c = cmp.upsert(s, cmp.from_dict(data))
+        cmp.assess(s, c)
+        audit(s, request, "campaign_added", f"{c.id} {c.provider}:{c.external_id}")
+        decide(s, "Campaign Strategist", f"campaign_{c.status.value}", f"{c.name}: {c.status_reason}")
+        return _campaign_row(c)
+
+
+@app.post("/api/campaigns/{campaign_id}/{action}", dependencies=auth)
+def campaign_action(campaign_id: int, action: Literal["pause", "reassess"], request: Request) -> dict:
+    from vp_agents import campaigns as cmp
+
+    with db.session_scope() as s:
+        c = s.get(Campaign, campaign_id)
+        if c is None:
+            raise HTTPException(404)
+        if action == "pause":
+            c.status, c.status_reason = CampaignStatus.restricted, "paused by owner"
+        else:
+            c.status = CampaignStatus.discovered
+            cmp.assess(s, c)
+        audit(s, request, f"campaign_{action}", str(campaign_id))
+        return _campaign_row(c)
+
+
+@app.get("/api/submissions", dependencies=auth)
+def list_submissions(limit: int = 200) -> list[dict]:
+    with db.session_scope() as s:
+        q = (select(CampaignSubmission, Campaign).join(Campaign).order_by(CampaignSubmission.id.desc())
+             .limit(max(1, min(limit, 500))))
+        return [{"id": x.id, "campaign": c.name, "campaign_url": c.url, "provider": c.provider,
+                 "status": x.status.value, "post_url": x.post_url, "qualified_views": x.qualified_views,
+                 "note": x.note, "submitted_at": _iso(x.submitted_at)} for x, c in s.execute(q).all()]
+
+
+class SubmissionUpdate(BaseModel):
+    status: Literal["submitted", "approved", "rejected"]
+    note: str = Field(default="", max_length=1000)
+
+
+@app.post("/api/submissions/{sub_id}", dependencies=auth)
+def update_submission(sub_id: int, body: SubmissionUpdate, request: Request) -> dict:
+    """For campaigns without an API: record that you pasted the link, or the outcome."""
+    with db.session_scope() as s:
+        x = s.get(CampaignSubmission, sub_id)
+        if x is None:
+            raise HTTPException(404)
+        x.status = SubmissionStatus(body.status)
+        x.note = body.note or x.note
+        if body.status == "submitted":
+            x.submitted_at = jobs.now_utc()
+        else:
+            x.resolved_at = jobs.now_utc()
+        audit(s, request, "submission_updated", f"{sub_id} -> {body.status}")
+        return {"ok": True}
+
+
+# ----------------------------------------------------------------- revenue
+
+class RevenueIn(BaseModel):
+    stream: Literal["campaign", "youtube", "facebook", "instagram", "tiktok", "affiliate", "direct", "other"]
+    amount: float = Field(gt=0, le=1_000_000)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    status: Literal["pending", "confirmed"]
+    evidence: str = Field(min_length=6, max_length=2000, description="payout ID, statement reference, invoice no.")
+    external_ref: str = Field(min_length=1, max_length=200)
+    occurred_at: str | None = None
+    campaign_id: int | None = None
+    publication_id: int | None = None
+    account_id: int | None = None
+
+
+@app.get("/api/revenue", dependencies=auth)
+def list_revenue(limit: int = 300) -> list[dict]:
+    with db.session_scope() as s:
+        q = select(RevenueEntry).order_by(RevenueEntry.occurred_at.desc()).limit(max(1, min(limit, 1000)))
+        return [{"id": r.id, "stream": r.stream, "source": r.source, "amount": r.amount, "currency": r.currency,
+                 "status": r.status.value, "evidence": r.evidence, "occurred_at": _iso(r.occurred_at),
+                 "campaign_id": r.campaign_id, "publication_id": r.publication_id} for r in s.execute(q).scalars()]
+
+
+@app.post("/api/revenue", dependencies=auth, status_code=201)
+def add_revenue(body: RevenueIn, request: Request) -> dict:
+    """Record money the system can't read from an API (e.g. a Content Rewards
+    payout). Evidence is required; the entry is marked as owner-entered."""
+    from datetime import datetime
+
+    with db.session_scope() as s:
+        exists = s.execute(select(RevenueEntry.id).where(RevenueEntry.source == "owner_entry",
+                                                         RevenueEntry.external_ref == body.external_ref)).first()
+        if exists:
+            raise HTTPException(409, "an entry with this reference already exists")
+        r = RevenueEntry(stream=body.stream, source="owner_entry", external_ref=body.external_ref, amount=body.amount,
+                         currency=body.currency.upper(), status=RevenueStatus(body.status), evidence=body.evidence,
+                         occurred_at=datetime.fromisoformat(body.occurred_at) if body.occurred_at else jobs.now_utc(),
+                         campaign_id=body.campaign_id, publication_id=body.publication_id, account_id=body.account_id)
+        s.add(r)
+        s.flush()
+        audit(s, request, "revenue_recorded", f"{r.id} {body.status} {body.amount} {body.currency}")
+        return {"id": r.id}
+
+
+class ConfirmIn(BaseModel):
+    evidence: str = Field(min_length=6, max_length=2000)
+
+
+@app.post("/api/revenue/{rev_id}/confirm", dependencies=auth)
+def confirm_revenue(rev_id: int, body: ConfirmIn, request: Request) -> dict:
+    with db.session_scope() as s:
+        r = s.get(RevenueEntry, rev_id)
+        if r is None or r.status != RevenueStatus.pending:
+            raise HTTPException(400, "only pending entries can be confirmed")
+        r.status = RevenueStatus.confirmed
+        r.evidence = f"{r.evidence} | confirmed: {body.evidence}"
+        audit(s, request, "revenue_confirmed", f"{rev_id}: {body.evidence}")
+        return {"ok": True}
+
+
+@app.get("/api/finance", dependencies=auth)
+def finance_overview() -> dict:
+    from vp_analytics import finance
+
+    with db.session_scope() as s:
+        return {"overview": finance.overview(s), "breakdown": finance.by_dimension(s),
+                "milestones": finance.milestone_plan(s), "last_14d": finance.last_14d(s)}

@@ -54,7 +54,7 @@ quality-check, publish and learn without a browser or laptop being on.
 | `tests` | Unit tests (SQLite or Postgres) and integration tests (real Postgres + Redis + Celery) |
 
 How the pipeline survives failures: [docs/architecture.md](docs/architecture.md).
-Platform approval requirements: [docs/platform-blockers.md](docs/platform-blockers.md).
+Platform approval requirements: [PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md).
 
 ## Run it locally
 

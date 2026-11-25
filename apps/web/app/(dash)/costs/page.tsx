@@ -11,13 +11,13 @@ export default function CostsPage() {
   const cats = Object.entries(costs.data?.by_category ?? {});
   return (
     <>
-      <PageTitle title="Costs & revenue" desc="Every paid step reserves its cost before running. Revenue shows only when a platform revenue API is connected." />
+      <PageTitle title="Costs" desc="Every paid step reserves its cost before running, against daily, monthly, lifetime and per-video caps. Revenue lives on the Revenue page." />
       <ErrorNote error={costs.error || st.error} />
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Spent today" value={st.data ? usd(st.data.spend.today) : "–"} hint={st.data ? `limit ${usd(st.data.spend.daily_limit)}` : undefined} />
         <Stat label="Spent this month" value={st.data ? usd(st.data.spend.month) : "–"} hint={st.data ? `limit ${usd(st.data.spend.monthly_limit)}` : undefined} />
-        <Stat label="Revenue" value={st.data ? (st.data.revenue === null ? "n/a" : usd(st.data.revenue)) : "–"} hint="not connected yet" />
-        <Stat label="Net" value={st.data && st.data.revenue !== null ? usd(st.data.revenue - st.data.spend.month) : "n/a"} />
+        <Stat label="Lifetime spend" value={st.data ? usd(st.data.spend.total) : "–"} hint={st.data ? `cap ${usd(st.data.spend.total_limit)}` : undefined} />
+        <Stat label="Net this month" value={st.data ? usd(st.data.revenue.net_month_confirmed) : "–"} hint="confirmed revenue minus spend" />
       </div>
       <div className="space-y-6">
         <Card>

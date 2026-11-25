@@ -28,3 +28,24 @@ The system will only process:
 Publicly viewable is not the same as licensed: YouTube videos, podcasts and
 interviews without one of the above are rejected. Music is the same: only
 licensed or royalty-free tracks you are entitled to use.
+
+## Paid clipping campaigns
+
+| Program | Integration | Notes |
+|---|---|---|
+| **Whop bounties** | Official Whop API (`GET /bounties`, `POST /bounty_submissions`) with your own OAuth token | Beta API. Flat reward per accepted submission. Submissions are created only for clips the platform confirmed as published. |
+| **Whop Content Rewards** | Manual | No public API for clippers. CPM roughly $1–3, about 10% fee, payouts in rounds. Follow each campaign's rules on footage and disclosure. |
+| **Vyro** | Manual | No public API. Roughly $1.40–2.00 per 1,000 views. |
+| **Direct brand deals** | Manual or authorized feed | Written agreement required before clipping. ViralPilot never sends outreach or accepts terms on your behalf. |
+
+Rules the engine applies to every campaign: footage must come from the
+campaign owner (stored as a creator-authorized source), clips go only to
+platforms where you have an approved, healthy account, ads/sponsorship
+disclosures are kept, and nothing buys or manufactures views.
+Campaign marketplaces are never scraped.
+
+## Monetization eligibility notes
+
+- YouTube's Partner Program excludes reused content without significant
+  original contribution, so clip channels rely on campaign payouts first.
+- Facebook Content Monetization is invite-only.

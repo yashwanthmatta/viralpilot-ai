@@ -71,7 +71,8 @@ def _run(job_id: int) -> str:
             raise_blocker(s2, err.key, err.title, err.detail)
             return "blocked"
         if isinstance(err, BudgetExceeded):
-            delay = _seconds_to_next_utc_day() if err.scope != "per-video" else 0
+            # daily: wait for tomorrow; monthly/total: re-check daily (limits may be raised)
+            delay = _seconds_to_next_utc_day()
             if err.scope == "per-video":
                 jobs.fail(s2, job, str(err))
                 job.status = jobs.JobStatus.failed  # never retry a per-video overrun

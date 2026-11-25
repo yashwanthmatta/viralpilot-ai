@@ -54,6 +54,10 @@ class BudgetSettings(Base):
     # Per-video ceiling: a single item may not consume more than this.
     per_item_limit_usd: Mapped[float] = mapped_column(Float, default=0.50)
     max_videos_per_day: Mapped[int] = mapped_column(Integer, default=3)
+    # Lifetime cap on variable spend (initial operating budget).
+    total_limit_usd: Mapped[float] = mapped_column(Float, default=100.0, server_default="100")
+    # The scaling engine may move max_videos_per_day up to this, never beyond.
+    max_videos_ceiling: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
 
 
 class CostEntryStatus(str, enum.Enum):
@@ -93,6 +97,7 @@ class LicenseType(str, enum.Enum):
 
 class SourceKind(str, enum.Enum):
     rss = "rss"                  # podcast / video RSS or Atom feed
+    direct_file = "direct_file"  # a single media file URL (e.g. campaign-provided footage)
     youtube_own_channel = "youtube_own_channel"
     stock_library = "stock_library"
     manual_library = "manual_library"  # a storage bucket the user owns
@@ -112,6 +117,7 @@ class Source(Base):
     attribution: Mapped[str] = mapped_column(String(500), default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     niche: Mapped[str] = mapped_column(String(80), default="")
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -135,6 +141,7 @@ class ContentItem(Base):
     __table_args__ = (UniqueConstraint("fingerprint", name="uq_item_fingerprint"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int | None] = mapped_column(ForeignKey("sources.id"), nullable=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
     fingerprint: Mapped[str] = mapped_column(String(128))
     external_id: Mapped[str] = mapped_column(String(500), default="")
     title: Mapped[str] = mapped_column(String(500), default="")
@@ -162,6 +169,7 @@ class Clip(Base):
     __tablename__ = "clips"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     item_id: Mapped[int] = mapped_column(ForeignKey("content_items.id"), index=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
     start_s: Mapped[float] = mapped_column(Float)
     end_s: Mapped[float] = mapped_column(Float)
     score: Mapped[float] = mapped_column(Float, default=0.0)
@@ -216,6 +224,7 @@ class Publication(Base):
     idempotency_key: Mapped[str] = mapped_column(String(100), unique=True)
     status: Mapped[PublicationStatus] = mapped_column(Enum(PublicationStatus), default=PublicationStatus.scheduled)
     scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
     platform_post_id: Mapped[str] = mapped_column(String(200), default="")
     platform_url: Mapped[str] = mapped_column(String(1000), default="")
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -231,6 +240,10 @@ class SocialAccount(Base):
     external_account_id: Mapped[str] = mapped_column(String(200), default="")
     encrypted_credentials: Mapped[str] = mapped_column(Text, default="")
     publishing_allowed: Mapped[bool] = mapped_column(Boolean, default=False)  # user permission switch
+    niche: Mapped[str] = mapped_column(String(80), default="")
+    brand: Mapped[dict] = mapped_column(JSON, default=dict)   # caption colours, CTA, handle
+    health: Mapped[str] = mapped_column(String(20), default="ok")  # ok | warning | paused
+    health_note: Mapped[str] = mapped_column(Text, default="")
     max_posts_per_day: Mapped[int] = mapped_column(Integer, default=2)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -316,3 +329,105 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(100))
     detail: Mapped[str] = mapped_column(Text, default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
+
+
+# ------------------------------------------------------------ campaigns
+
+class CampaignStatus(str, enum.Enum):
+    discovered = "discovered"
+    eligible = "eligible"        # passed checks, positive expected profit
+    active = "active"            # we are producing clips for it
+    restricted = "restricted"    # legit, but some step needs a human (e.g. manual link submission)
+    rejected = "rejected"        # expired / suspicious / unprofitable / incompatible
+    exhausted = "exhausted"      # budget used up
+    ended = "ended"
+
+
+class Campaign(Base):
+    """A paid clipping opportunity. Money fields are what the campaign states,
+    never our estimate; our estimate lives in `evaluation` and is labelled."""
+
+    __tablename__ = "campaigns"
+    __table_args__ = (UniqueConstraint("provider", "external_id", name="uq_campaign_provider_ext"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(40))          # whop_bounty, content_rewards, vyro, direct, feed
+    external_id: Mapped[str] = mapped_column(String(200))
+    name: Mapped[str] = mapped_column(String(300))
+    creator: Mapped[str] = mapped_column(String(200), default="")
+    url: Mapped[str] = mapped_column(String(1000), default="")
+    payout_model: Mapped[str] = mapped_column(String(20), default="cpm")  # cpm | flat
+    currency: Mapped[str] = mapped_column(String(8), default="USD")
+    rate_per_1k: Mapped[float | None] = mapped_column(Float, nullable=True)
+    flat_reward: Mapped[float | None] = mapped_column(Float, nullable=True)
+    budget_total: Mapped[float | None] = mapped_column(Float, nullable=True)
+    budget_remaining: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min_payout: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_payout_per_video: Mapped[float | None] = mapped_column(Float, nullable=True)
+    platform_fee_pct: Mapped[float] = mapped_column(Float, default=0.0)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    platforms: Mapped[list] = mapped_column(JSON, default=list)       # e.g. ["youtube", "tiktok"]
+    countries: Mapped[list] = mapped_column(JSON, default=list)       # empty = worldwide
+    requirements: Mapped[str] = mapped_column(Text, default="")
+    footage_urls: Mapped[list] = mapped_column(JSON, default=list)    # campaign-provided source media / feeds
+    rights_note: Mapped[str] = mapped_column(Text, default="")
+    submission_method: Mapped[str] = mapped_column(String(20), default="manual")  # api | manual
+    automation_allowed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    payment_reliability: Mapped[float | None] = mapped_column(Float, nullable=True)  # observed 0..1
+    status: Mapped[CampaignStatus] = mapped_column(Enum(CampaignStatus), default=CampaignStatus.discovered, index=True)
+    status_reason: Mapped[str] = mapped_column(Text, default="")
+    evaluation: Mapped[dict] = mapped_column(JSON, default=dict)      # expected value breakdown (ESTIMATE)
+    raw: Mapped[dict] = mapped_column(JSON, default=dict)
+    discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SubmissionStatus(str, enum.Enum):
+    ready = "ready"              # published, waiting to be submitted
+    manual_required = "manual_required"
+    submitted = "submitted"
+    approved = "approved"
+    rejected = "rejected"
+    paid = "paid"
+
+
+class CampaignSubmission(Base):
+    __tablename__ = "campaign_submissions"
+    __table_args__ = (UniqueConstraint("campaign_id", "publication_id", name="uq_submission_campaign_pub"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"), index=True)
+    publication_id: Mapped[int] = mapped_column(ForeignKey("publications.id"))
+    status: Mapped[SubmissionStatus] = mapped_column(Enum(SubmissionStatus), default=SubmissionStatus.ready)
+    external_id: Mapped[str] = mapped_column(String(200), default="")
+    post_url: Mapped[str] = mapped_column(String(1000), default="")
+    qualified_views: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RevenueStatus(str, enum.Enum):
+    pending = "pending"        # reported by the payer but not yet credited
+    confirmed = "confirmed"    # credited/paid, with evidence
+    reversed = "reversed"
+
+
+class RevenueEntry(Base):
+    """Money only. Every row cites where the number came from (`evidence`).
+    Our own forecasts are never stored here."""
+
+    __tablename__ = "revenue_entries"
+    __table_args__ = (UniqueConstraint("source", "external_ref", name="uq_revenue_source_ref"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stream: Mapped[str] = mapped_column(String(40))      # campaign, youtube, facebook, affiliate, direct
+    source: Mapped[str] = mapped_column(String(60))      # who reported it: whop_api, youtube_analytics, manual_entry ...
+    external_ref: Mapped[str] = mapped_column(String(200))
+    amount: Mapped[float] = mapped_column(Float)
+    currency: Mapped[str] = mapped_column(String(8), default="USD")
+    status: Mapped[RevenueStatus] = mapped_column(Enum(RevenueStatus), default=RevenueStatus.pending, index=True)
+    evidence: Mapped[str] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
+    publication_id: Mapped[int | None] = mapped_column(ForeignKey("publications.id"), nullable=True)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("social_accounts.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

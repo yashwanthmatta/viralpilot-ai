@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import os
 import tempfile
+from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from vp_shared import budget
 from vp_shared.config import get_settings
 from vp_shared.events import decide
-from vp_shared.jobs import StageBlocked, enqueue
+from vp_shared.jobs import RetryLater, StageBlocked, enqueue, now_utc
 from vp_shared.models import Clip, ClipStage, ContentItem, ItemStage, Job, TranscriptCache
 from vp_video import clipfinder, editplan, ffmpeg, render, transcribe
 
@@ -75,11 +77,13 @@ def clip_item(s: Session, job: Job) -> None:
                item_id=item.id)
         return
     for c in cands:
-        clip = Clip(item_id=item.id, start_s=c.start, end_s=c.end, score=c.score, reason=c.reason,
+        clip = Clip(item_id=item.id, campaign_id=item.campaign_id, start_s=c.start, end_s=c.end, score=c.score, reason=c.reason,
                     features=c.features, transcript_text=c.text[:8000])
         s.add(clip)
         s.flush()
-        enqueue(s, "edit.clip", f"edit:{clip.id}", {"clip_id": clip.id})
+        # Campaign clips (paid) go to the front of the editing queue.
+        delay = timedelta(0) if item.campaign_id else timedelta(minutes=30)
+        enqueue(s, "edit.clip", f"edit:{clip.id}", {"clip_id": clip.id}, run_after=now_utc() + delay)
         decide(s, CLIPPER, "clip_selected",
                f"{c.start:.1f}-{c.end:.1f}s score {c.score:.2f} ({c.reason})", item_id=item.id, clip_id=clip.id)
     item.stage = ItemStage.clipped
@@ -90,6 +94,12 @@ def edit_clip(s: Session, job: Job) -> None:
     clip = s.get(Clip, job.payload["clip_id"])
     if clip is None or clip.stage != ClipStage.proposed:
         return
+    cap = budget.get_budget(s).max_videos_per_day
+    done_today = s.execute(select(func.count(Clip.id)).where(
+        Clip.stage != ClipStage.proposed, Clip.created_at >= now_utc() - timedelta(hours=24),
+        Clip.render_path != "")).scalar_one()
+    if done_today >= cap:
+        raise RetryLater(f"daily video cap reached ({cap}/day)", 3600)
     item = s.get(ContentItem, clip.item_id)
     tr = load_transcript(s, item)
     if tr is None:

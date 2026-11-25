@@ -56,6 +56,9 @@ def test_full_local_pipeline(tmp_path, fake_tr, monkeypatch):
 
     assert _run_kind("transcribe.item") == ["succeeded"]
     assert _run_kind("clip.item") == ["succeeded"]
+    with db.session_scope() as s:  # non-campaign clips are queued 30 min behind paid work
+        for j in s.query(Job).filter_by(kind="edit.clip"):
+            j.run_after = jobs.now_utc()
     results = _run_kind("edit.clip")
     assert results and all(r == "succeeded" for r in results)
 

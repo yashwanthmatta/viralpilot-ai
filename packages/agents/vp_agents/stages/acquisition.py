@@ -91,6 +91,7 @@ def ingest_entries(s: Session, src: Source, entries: list[FeedEntry]) -> dict[st
             decision = rights.RightsDecision(False, lic, f"not audio/video ({e.media_type})")
         item = ContentItem(
             source_id=src.id,
+            campaign_id=src.campaign_id,
             fingerprint=fp,
             external_id=e.guid[:500],
             title=e.title[:500],
@@ -121,8 +122,14 @@ def discover_source(s: Session, job: Job) -> None:
     src = s.get(Source, job.payload["source_id"])
     if src is None or not src.enabled:
         return
+    if src.kind == SourceKind.direct_file:
+        # A single authorised media file (e.g. campaign footage): one entry, no feed to parse.
+        entry = FeedEntry(guid=src.url, title=src.name, media_url=src.url, media_type="", license_url="")
+        counts = ingest_entries(s, src, [entry])
+        src.last_polled_at = now_utc()
+        decide(s, "Trend Researcher", "checked_direct_source", f"{src.name}: {counts}")
+        return
     if src.kind != SourceKind.rss:
-        # Other source kinds arrive in later phases; never guess at them.
         decide(s, AGENT, "skipped_source", f"source kind {src.kind.value} not supported yet")
         return
     resp = fetch(src.url)

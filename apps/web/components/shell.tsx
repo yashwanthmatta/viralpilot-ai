@@ -8,6 +8,8 @@ import {
   Compass,
   DollarSign,
   Gauge,
+  Handshake,
+  Landmark,
   LogOut,
   Rss,
   Server,
@@ -24,6 +26,8 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Command center", icon: Gauge },
+  { href: "/campaigns", label: "Paid campaigns", icon: Handshake },
+  { href: "/revenue", label: "Revenue", icon: Landmark },
   { href: "/activity", label: "Live activity", icon: Activity },
   { href: "/agents", label: "AI agents", icon: Bot },
   { href: "/discovery", label: "Content discovery", icon: Compass },
@@ -31,7 +35,7 @@ const NAV = [
   { href: "/publishing", label: "Publishing", icon: CalendarClock },
   { href: "/accounts", label: "Social accounts", icon: Share2 },
   { href: "/sources", label: "Sources", icon: Rss },
-  { href: "/costs", label: "Costs & revenue", icon: DollarSign },
+  { href: "/costs", label: "Costs", icon: DollarSign },
   { href: "/system", label: "System health", icon: Server },
   { href: "/security", label: "Security", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },

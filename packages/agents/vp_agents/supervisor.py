@@ -61,7 +61,8 @@ def tick() -> dict:
                 raise_blocker(s, a.blocker_key, f"{acc.platform}: publishing blocked", a.reason)
 
         spend = budget.summary(s, now)
-        for scope, exhausted in (("daily", spend.daily_exhausted), ("monthly", spend.monthly_exhausted)):
+        for scope, exhausted in (("daily", spend.daily_exhausted), ("monthly", spend.monthly_exhausted),
+                                 ("total", spend.total_exhausted)):
             if not exhausted:
                 resolve_blocker(s, f"budget.{scope}")
 
@@ -74,6 +75,11 @@ def tick() -> dict:
                     if jobs.enqueue(s, "discover.source", f"discover:{src.id}:{bucket}", {"source_id": src.id}):
                         scheduled += 1
                 st.last_discovery_at = now
+            cbucket = int(now.timestamp() // cfg.campaign_discovery_interval_s)
+            if jobs.enqueue(s, "discover.campaigns", f"campaigns:{cbucket}"):
+                scheduled += 1
+            day = now.strftime("%Y-%m-%d")
+            jobs.enqueue(s, "strategy.daily", f"strategy:{day}")
         report["discovery_jobs"] = scheduled
         st.last_tick_at = now
         due = jobs.due_job_ids(s, limit=200) if st.enabled else []

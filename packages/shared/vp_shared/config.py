@@ -39,9 +39,14 @@ class Settings:
     # database is created; afterwards the values stored in BudgetSettings win
     # (the dashboard edits those). The worker refuses any paid step that would
     # cross either ceiling.
-    default_daily_limit_usd: float = field(default_factory=lambda: _float("DAILY_LIMIT_USD", 5.0))
-    default_monthly_limit_usd: float = field(default_factory=lambda: _float("MONTHLY_LIMIT_USD", 30.0))
+    default_daily_limit_usd: float = field(default_factory=lambda: _float("DAILY_LIMIT_USD", 3.0))
+    default_monthly_limit_usd: float = field(default_factory=lambda: _float("MONTHLY_LIMIT_USD", 90.0))
 
+    # Lifetime ceiling on variable spend until you raise it (initial operating budget).
+    default_total_limit_usd: float = field(default_factory=lambda: _float("TOTAL_LIMIT_USD", 100.0))
+    default_per_video_limit_usd: float = field(default_factory=lambda: _float("PER_VIDEO_LIMIT_USD", 0.50))
+    # Upper bound the scaling engine may raise daily output to (it starts lower).
+    default_max_videos_ceiling: int = field(default_factory=lambda: _int("MAX_VIDEOS_CEILING", 5))
     # Initial production cap: unique videos produced per day, spread across platforms.
     default_max_videos_per_day: int = field(default_factory=lambda: _int("MAX_VIDEOS_PER_DAY", 3))
 
@@ -49,6 +54,7 @@ class Settings:
     supervisor_interval_s: int = field(default_factory=lambda: _int("SUPERVISOR_INTERVAL_S", 60))
     job_lease_s: int = field(default_factory=lambda: _int("JOB_LEASE_S", 900))
     job_max_attempts: int = field(default_factory=lambda: _int("JOB_MAX_ATTEMPTS", 4))
+    campaign_discovery_interval_s: int = field(default_factory=lambda: _int("CAMPAIGN_DISCOVERY_INTERVAL_S", 10800))
     discovery_interval_s: int = field(default_factory=lambda: _int("DISCOVERY_INTERVAL_S", 3600))
     # Set only in tests / local dev to allow fetching from private hosts.
     allow_private_network: bool = field(default_factory=lambda: os.environ.get("ALLOW_PRIVATE_NETWORK", "") == "1")
