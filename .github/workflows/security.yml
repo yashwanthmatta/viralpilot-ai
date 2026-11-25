@@ -1,0 +1,46 @@
+name: Security
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule: [{ cron: "17 6 * * 1" }]
+permissions: { contents: read, security-events: write }
+
+jobs:
+  python-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev]"
+      - name: Known-vulnerability scan (pip-audit)
+        run: pip-audit --skip-editable
+      - name: Static analysis (bandit)
+        run: bandit -q -r packages apps/api apps/worker -x tests
+
+  npm-deps:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - run: npm audit --audit-level=high --omit=dev
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+
+  codeql:
+    runs-on: ubuntu-latest
+    strategy: { matrix: { language: [python, javascript-typescript] } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with: { languages: "${{ matrix.language }}" }
+      - uses: github/codeql-action/analyze@v3

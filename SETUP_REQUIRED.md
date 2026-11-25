@@ -1,0 +1,40 @@
+# Setup that needs you
+
+Only things the system genuinely cannot do for you. Everything else is automated.
+
+## Now (to run phase 1 in the cloud)
+
+1. **Approve hosting spend.** Nothing has been deployed or purchased. The
+   suggested setup (Render for API + always-on worker + Postgres + Redis,
+   Vercel Hobby for the dashboard) is estimated at roughly **$30–40/month**
+   before AI usage; check current prices on render.com/pricing. Background
+   workers have no free tier, and free web services sleep, so a free-only setup
+   can't run 24/7. Vercel Hobby is for non-commercial use; if the channels earn
+   money, Vercel's terms require the Pro plan (about $20/month) or you can host
+   the dashboard on Render too.
+2. **Create the secrets** (on your machine, never in git):
+   `python scripts/gen_secrets.py` and `python scripts/hash_password.py`, then
+   enter them as secret env vars on the host.
+3. **Turn on branch protection** for `main` in GitHub (Settings → Branches),
+   requiring the CI check. This session doesn't have admin rights to do it.
+
+## Before content can flow (phase 2–3)
+
+4. **Authorise at least one source** in the dashboard: a feed of content you
+   own, have written permission for, or that is CC BY / BY-SA / CC0 / public
+   domain. You state the licence and evidence once per source.
+5. **API keys** for the steps that need a model: an Anthropic (Claude) key, and
+   optionally OpenAI and a text-to-speech provider. Spending is capped by the
+   dashboard limits regardless.
+6. **Cloudflare R2 (or S3) bucket** and access keys for rendered videos.
+
+## Before publishing (phase 4)
+
+7. **YouTube:** create a Google Cloud project, enable YouTube Data API v3,
+   configure the OAuth consent screen, then click *Connect* in the dashboard.
+   Apply for the YouTube API compliance audit so uploads can be public.
+8. **Instagram / Facebook:** Meta developer app, Instagram professional account
+   linked to a Facebook Page, App Review for publishing permissions.
+9. **TikTok:** TikTok for Developers app and Content Posting API audit.
+
+See [docs/platform-blockers.md](docs/platform-blockers.md) for what each one involves.
