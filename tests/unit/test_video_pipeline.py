@@ -5,7 +5,20 @@ import shutil
 import pytest
 from vp_agents.worker import run_job
 from vp_shared import db, jobs
-from vp_shared.models import Clip, ClipStage, ContentItem, ItemStage, Job, JobStatus, LicenseType, TranscriptCache
+from vp_shared.models import (
+    Clip,
+    ClipStage,
+    ContentItem,
+    IntegrationBlocker,
+    ItemStage,
+    Job,
+    JobStatus,
+    LicenseType,
+    Publication,
+    PublicationStatus,
+    SocialAccount,
+    TranscriptCache,
+)
 from vp_video import ffmpeg, transcribe
 
 from tests.conftest import start_autopilot
@@ -73,6 +86,32 @@ def test_full_local_pipeline(tmp_path, fake_tr, monkeypatch):
             assert (info.width, info.height) == (1080, 1920)
         assert s.query(Job).filter_by(kind="qc.clip").count() == len(clips)
         assert s.query(TranscriptCache).count() == 1
+
+    # QC measures the real renders.
+    assert all(r == "succeeded" for r in _run_kind("qc.clip"))
+    with db.session_scope() as s:
+        for c in s.query(Clip):
+            assert c.stage == ClipStage.qc_passed, c.qc_report
+            assert c.qc_report["passed"] is True
+
+    # Metadata is written (rules: no API key in tests), then the job waits for an account.
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert set(_run_kind("metadata.clip")) == {"blocked"}
+    with db.session_scope() as s:
+        for c in s.query(Clip):
+            assert c.stage == ClipStage.ready and c.title and "#Shorts" not in c.hashtags
+        s.add(SocialAccount(platform="youtube", display_name="My channel", publishing_allowed=True))
+        for j in s.query(Job).filter_by(kind="metadata.clip"):
+            j.run_after = jobs.now_utc()
+        assert jobs.recheck_blocked(s) == len(clips)
+    assert all(r == "succeeded" for r in _run_kind("metadata.clip"))
+    with db.session_scope() as s:
+        pubs = s.query(Publication).order_by(Publication.scheduled_for).all()
+        assert len(pubs) == len(clips) and all(p.status == PublicationStatus.scheduled for p in pubs)
+        if len(pubs) == 2:  # spaced by the account's posts-per-day limit
+            assert (pubs[1].scheduled_for - pubs[0].scheduled_for).total_seconds() >= 11.9 * 3600
+        assert s.query(Job).filter_by(kind="publish.publication").count() == len(pubs)
+        assert s.query(IntegrationBlocker).filter_by(key="accounts.publishable").one().resolved
 
 
 def test_transcript_cache_prevents_retranscribing(tmp_path, fake_tr):

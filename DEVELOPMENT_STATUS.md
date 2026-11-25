@@ -1,12 +1,11 @@
 # Development status
 
-_Last updated: 2026-11-25 (phase 3a: paid campaign engine)_
+_Last updated: 2026-11-25 (phase 3b: QC, metadata, scheduling)_
 
 ## Acceptance test status
 
-**Not passed.** The zero-touch acceptance test still needs the QC and
-metadata stages (phase 3b), at least one approved publishing integration with
-real credentials (phase 4), real campaign credentials (Whop OAuth) and real
+**Not passed.** The zero-touch acceptance test still needs at least one
+approved publishing integration with real credentials (phase 4), real campaign credentials (Whop OAuth) and real
 metrics (phase 5). Nothing below claims otherwise. Tests
 that use fake adapters prove our own safety logic only.
 
@@ -35,8 +34,8 @@ that use fake adapters prove our own safety logic only.
 
 ### Latest local test results
 
-- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **87 passed**
-- `pytest tests/unit` on SQLite: **85 passed**
+- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **101 passed**
+- `pytest tests/unit` on SQLite: **99 passed**
 - Alembic upgrade → downgrade → upgrade and `alembic check` on PostgreSQL 16: clean
 - `ruff check .`: clean · `bandit`: no issues · `pip-audit`: no known vulnerabilities
 - `npm run lint`, `typecheck`, `build`: pass · `npm audit --omit=dev`: 0 vulnerabilities
@@ -67,12 +66,25 @@ that use fake adapters prove our own safety logic only.
 | Milestone calculator ($1 → $100k/month), measured once ≥ 10 paid videos, otherwise labeled assumptions | done | `/revenue` page |
 | Dashboard: Paid campaigns, Revenue, revenue stats on the command center, lifetime cap and scaling ceiling in Settings | done | `next build` passes |
 
+## Phase 3b — Quality control, metadata, scheduling: done
+
+| Area | State | Evidence |
+|---|---|---|
+| QC measured on the rendered file: resolution, frame rate, duration, audio/video streams, loudness (EBU R128), dead air, black frames, frozen video, captions, cover | done | `test_quality.py` on real FFmpeg renders |
+| Bounded regeneration: fixable failures re-render once (`QC_MAX_ATTEMPTS`), others are discarded with the reason | done | `test_quality.py`, pipeline test |
+| Metadata by Claude (`METADATA_MODEL`, default `claude-opus-5-5` at low effort, structured JSON output, server-side refusal fallback) with budget reservation and the real cost from `usage` | done; real API not called here (no key in this sandbox) | `test_quality.py` with a fake client |
+| Rules writer used when there is no key, the budget can't cover the call, or the model fails | done | `test_quality.py` |
+| Non-optional rules: `#ad` and "Paid partnership" for campaign clips, CC BY attribution, `#Shorts`, title limits, engagement-bait removal | done | `test_quality.py` |
+| Scheduling onto accounts with publishing allowed, spaced by each account's posts-per-day | done | `test_video_pipeline.py` |
+| Blocked jobs re-check themselves every 30 min and clear their dashboard blocker when they succeed | done | `test_worker.py` |
+| Video library: in-browser preview (served only from `MEDIA_DIR`, login required), QC results, hook, description, cost | done | `test_revenue_api.py`, `next build` |
+
 ## Remaining phases
 
 | Phase | Scope | Blocked by |
 |---|---|---|
 | 2b — Storage | R2/S3 upload of renders with lifecycle rules | an R2 bucket (cloud deploy only) |
-| 3b — Intelligence | Claude-based hook/metadata with model routing and caching, automated QC with bounded regeneration, trend signals, niche research, original faceless video generation with TTS | Claude/OpenAI API keys; TTS provider key |
+| 3c — Intelligence | trend signals, niche research, original faceless video generation with TTS | Claude/OpenAI API keys; TTS provider key |
 | 4 — Publishing | OAuth (connect, encrypted storage, refresh), YouTube `videos.insert` + lookup, Instagram/Facebook Graph publishing, TikTok Content Posting, schedule optimiser | platform app approvals ([PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md)) |
 | 5 — Growth engine | metrics collection, per-dimension performance, controlled experiments (explore/exploit), automatic strategy weights | phase 4 + real published videos |
 | 6 — Cloud deploy | Render (API, worker, Postgres, Key Value, disk) + Vercel | your approval of the monthly cost; account access |

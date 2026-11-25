@@ -5,12 +5,14 @@ invented here. Fields with no data source yet (e.g. revenue) return null.
 """
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from typing import Literal
 
 import vp_publishing
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 from sqlalchemy import func, select
 from vp_agents import rights
@@ -244,7 +246,31 @@ def clips(limit: int = 100) -> list[dict]:
         q = select(Clip).order_by(Clip.id.desc()).limit(max(1, min(limit, 500)))
         return [{"id": c.id, "item_id": c.item_id, "start_s": c.start_s, "end_s": c.end_s, "score": c.score,
                  "stage": c.stage.value, "title": c.title, "reason": c.reason, "qc": c.qc_report,
-                 "has_render": bool(c.render_path)} for c in s.execute(q).scalars()]
+                 "qc_attempts": c.qc_attempts, "description": c.description, "hashtags": c.hashtags,
+                 "metadata": (c.features or {}).get("metadata"), "campaign_id": c.campaign_id,
+                 "duration_s": c.duration_s, "has_render": bool(c.render_path),
+                 "has_cover": bool(c.cover_path)} for c in s.execute(q).scalars()]
+
+
+def _media_file(path: str) -> str:
+    """Only files inside MEDIA_DIR are ever served."""
+    root = os.path.realpath(get_settings().media_dir)
+    real = os.path.realpath(path or "")
+    if not path or os.path.commonpath([root, real]) != root or not os.path.isfile(real):
+        raise HTTPException(404, "file not available")
+    return real
+
+
+@app.get("/api/clips/{clip_id}/{kind}", dependencies=auth)
+def clip_file(clip_id: int, kind: Literal["video", "cover"]) -> FileResponse:
+    with db.session_scope() as s:
+        c = s.get(Clip, clip_id)
+        if c is None:
+            raise HTTPException(404, "clip not found")
+        path = c.render_path if kind == "video" else c.cover_path
+    real = _media_file(path)
+    return FileResponse(real, media_type="video/mp4" if kind == "video" else "image/jpeg",
+                        headers={"Cache-Control": "private, max-age=300"})
 
 
 @app.get("/api/publications", dependencies=auth)

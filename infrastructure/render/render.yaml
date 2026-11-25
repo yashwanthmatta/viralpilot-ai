@@ -58,6 +58,8 @@ services:
       - { key: OPERATOR_COUNTRY, sync: false }
       - { key: CAMPAIGN_FEED_URLS, sync: false }
       - { key: MAX_ACTIVE_CAMPAIGNS, value: "3" }
+      - { key: ANTHROPIC_API_KEY, sync: false }
+      - { key: METADATA_MODEL, value: claude-opus-5-5 }
 
   - type: keyvalue
     name: viralpilot-queue

@@ -50,3 +50,35 @@ def test_revenue_requires_evidence_and_keeps_pending_separate(client):
 def test_budget_defaults_match_spec(client):
     b = client.get("/api/budget").json()
     assert b["total_limit_usd"] == 100 and b["max_videos_ceiling"] == 5 and b["per_item_limit_usd"] == 0.5
+
+
+def test_clip_media_is_served_only_from_media_dir(client, tmp_path, monkeypatch):
+    from vp_shared import db
+    from vp_shared.config import get_settings
+    from vp_shared.models import Clip, ContentItem
+
+    media = tmp_path / "media"
+    (media / "renders").mkdir(parents=True)
+    good = media / "renders" / "c.mp4"
+    good.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    outside = tmp_path / "secret.txt"
+    outside.write_text("nope")
+    monkeypatch.setenv("MEDIA_DIR", str(media))
+    assert get_settings().media_dir == str(media)
+    with db.session_scope() as s:
+        item = ContentItem(fingerprint="m", title="t")
+        s.add(item)
+        s.flush()
+        ok = Clip(item_id=item.id, start_s=0, end_s=1, render_path=str(good))
+        bad = Clip(item_id=item.id, start_s=0, end_s=1, render_path=str(outside))
+        s.add_all([ok, bad])
+        s.flush()
+        ok_id, bad_id = ok.id, bad.id
+    r = client.get(f"/api/clips/{ok_id}/video")
+    assert r.status_code == 200 and r.headers["content-type"] == "video/mp4"
+    assert client.get(f"/api/clips/{bad_id}/video").status_code == 404
+    assert client.get(f"/api/clips/{ok_id}/cover").status_code == 404
+    assert client.get(f"/api/clips/{ok_id}/other").status_code == 422
+    security._attempts.clear()
+    with TestClient(app) as anon:
+        assert anon.get(f"/api/clips/{ok_id}/video").status_code == 401

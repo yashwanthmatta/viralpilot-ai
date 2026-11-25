@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import or_, select, update
@@ -136,11 +137,34 @@ def retry_later(s: Session, job: Job, reason: str, delay_s: int, now: datetime |
     job.run_after = now + timedelta(seconds=delay_s)
 
 
-def block(s: Session, job: Job, reason: str) -> None:
+BLOCK_RECHECK_S = 1800
+
+
+def block(s: Session, job: Job, reason: str, key: str = "", recheck_s: int = BLOCK_RECHECK_S) -> None:
+    """Park a job on an external blocker. Blocking doesn't use up an attempt;
+    the supervisor puts the job back after ``recheck_s`` so the stage can
+    check again by itself (no manual retry needed once the cause is fixed)."""
     job.status = JobStatus.blocked
     job.attempts = max(job.attempts - 1, 0)
     job.lease_expires_at = None
-    job.last_error = reason
+    job.last_error = f"[{key}] {reason}" if key else reason
+    job.run_after = now_utc() + timedelta(seconds=recheck_s)
+
+
+_KEY_RE = re.compile(r"^\[([^\]]+)\] ")
+
+
+def blocker_key(job: Job) -> str:
+    m = _KEY_RE.match(job.last_error or "")
+    return m.group(1) if m else ""
+
+
+def recheck_blocked(s: Session, now: datetime | None = None) -> int:
+    now = now or now_utc()
+    rows = s.execute(select(Job).where(Job.status == JobStatus.blocked, Job.run_after <= now)).scalars().all()
+    for j in rows:
+        j.status = JobStatus.pending
+    return len(rows)
 
 
 def release_to_pending(s: Session, job: Job) -> None:

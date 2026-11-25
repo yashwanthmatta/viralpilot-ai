@@ -33,6 +33,7 @@ def tick() -> dict:
         now = jobs.now_utc()
         st = autopilot(s)
         report["recovered"] = jobs.recover_expired(s, now)
+        report["rechecked_blocked"] = jobs.recheck_blocked(s, now)
         if report["recovered"]:
             decide(s, "Autonomous Supervisor", "recovered_jobs",
                    f"{report['recovered']} interrupted job(s) put back in the queue")

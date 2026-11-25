@@ -31,11 +31,11 @@ def test_success():
 
 def test_unbuilt_stage_blocks_and_reports():
     start_autopilot()
-    jid = _job("qc.clip")
+    jid = _job("analytics.publication")
     assert run_job(jid) == "blocked"
     with db.session_scope() as s:
         assert s.get(Job, jid).status == JobStatus.blocked
-        assert s.query(IntegrationBlocker).filter_by(key="stage.qc.clip").one()
+        assert s.query(IntegrationBlocker).filter_by(key="stage.analytics.publication").one()
 
 
 def test_budget_exhaustion_waits_without_spending():
@@ -70,3 +70,29 @@ def test_handler_error_retries_then_dead_letters():
     with db.session_scope() as s:
         s.get(Job, jid).run_after = jobs.now_utc()
     assert run_job(jid) == "failed"
+
+
+def test_blocked_job_is_rechecked_and_clears_its_blocker():
+    from vp_agents.stages import REGISTRY
+    from vp_shared.jobs import StageBlocked
+
+    load_all()
+    state = {"ready": False}
+
+    def gated(s, j):
+        if not state["ready"]:
+            raise StageBlocked("test.gate", "Gate closed", "waiting")
+
+    REGISTRY["test.gated"] = gated
+    start_autopilot()
+    jid = _job("test.gated")
+    assert run_job(jid) == "blocked"
+    with db.session_scope() as s:
+        assert jobs.blocker_key(s.get(Job, jid)) == "test.gate"
+        assert jobs.recheck_blocked(s) == 0  # not before the recheck delay
+        s.get(Job, jid).run_after = jobs.now_utc()
+        assert jobs.recheck_blocked(s) == 1
+    state["ready"] = True
+    assert run_job(jid) == "succeeded"
+    with db.session_scope() as s:
+        assert s.query(IntegrationBlocker).filter_by(key="test.gate").one().resolved is True

@@ -13,8 +13,6 @@ from vp_shared.models import Job
 from . import stage
 
 PENDING_STAGES = {
-    "qc.clip": ("Phase 4", "Automated quality control"),
-    "metadata.clip": ("Phase 4", "Titles, descriptions and hashtags"),
     "analytics.publication": ("Phase 5", "Performance metrics collection"),
     "generate.original": ("Phase 7", "Original faceless video generation"),
 }

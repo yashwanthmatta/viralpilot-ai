@@ -1,12 +1,13 @@
-"""Job execution. Called by RQ workers with a job id (Redis carries only ids)."""
+"""Job execution. Called by the Celery worker with a job id (Redis carries only ids)."""
 from __future__ import annotations
 
 import logging
 import traceback
 
+from sqlalchemy import select
 from vp_shared import db, jobs
 from vp_shared.budget import BudgetExceeded
-from vp_shared.events import autopilot, decide, raise_blocker
+from vp_shared.events import autopilot, decide, raise_blocker, resolve_blocker
 from vp_shared.jobs import RetryLater, StageBlocked
 from vp_shared.models import Job
 
@@ -50,11 +51,15 @@ def _run(job_id: int) -> str:
     outcome = "succeeded"
     try:
         job = s.get(Job, job_id)
+        was_blocked_on = jobs.blocker_key(job)
         if handler is None:
             raise RuntimeError(f"no handler for job kind {kind!r}")
         handler(s, job)
         job = s.get(Job, job_id)  # handler may have committed
         jobs.succeed(s, job)
+        if was_blocked_on and not s.execute(select(Job.id).where(
+                Job.status == jobs.JobStatus.blocked, Job.last_error.startswith(f"[{was_blocked_on}]"))).first():
+            resolve_blocker(s, was_blocked_on)  # the cause is gone: clear it from the dashboard
         s.commit()
         return outcome
     except Exception as exc:  # noqa: BLE001 — every failure is recorded
@@ -67,7 +72,7 @@ def _run(job_id: int) -> str:
     with db.session_scope() as s2:
         job = s2.get(Job, job_id)
         if isinstance(err, StageBlocked):
-            jobs.block(s2, job, err.title)
+            jobs.block(s2, job, err.title, key=err.key)
             raise_blocker(s2, err.key, err.title, err.detail)
             return "blocked"
         if isinstance(err, BudgetExceeded):

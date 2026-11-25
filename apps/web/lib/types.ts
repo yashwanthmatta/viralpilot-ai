@@ -34,7 +34,13 @@ export type Status = {
 export type Decision = { id: number; at: string; agent: string; action: string; detail: string; item_id: number | null; clip_id: number | null };
 export type AgentRow = { agent: string; decisions: number; last_active: string | null };
 export type Item = { id: number; title: string; stage: string; license: string; rights_note: string; source_id: number | null; discovered_at: string };
-export type ClipRow = { id: number; item_id: number; start_s: number; end_s: number; score: number; stage: string; title: string; reason: string; has_render: boolean };
+export type QCCheck = { name: string; passed: boolean; detail: string; retryable: boolean };
+export type ClipMeta = { hook: string; writer: string; model: string; cost_usd: number; paid_promotion: boolean; notes: string[] };
+export type ClipRow = {
+  id: number; item_id: number; start_s: number; end_s: number; score: number; stage: string; title: string; reason: string;
+  qc: { passed?: boolean; checks?: QCCheck[] }; qc_attempts: number; description: string; hashtags: string[];
+  metadata: ClipMeta | null; campaign_id: number | null; duration_s: number | null; has_render: boolean; has_cover: boolean;
+};
 export type Pub = { id: number; clip_id: number; platform: string; status: string; scheduled_for: string | null; confirmed_at: string | null; platform_post_id: string; url: string; error: string };
 export type SourceRow = { id: number; name: string; kind: string; url: string; license: string; rights_evidence: string; attribution: string; niche: string; enabled: boolean; last_polled_at: string | null };
 export type Account = { id: number; platform: string; name: string; connected: boolean; publishing_allowed: boolean; max_posts_per_day: number; can_publish: boolean; blocked_reason: string };
