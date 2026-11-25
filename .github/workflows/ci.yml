@@ -48,3 +48,21 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+
+  image:
+    # Proves the production image builds (dashboard export + backend) and starts.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f infrastructure/docker/backend.Dockerfile -t viralpilot:ci .
+      - name: Start API in the image and check health and dashboard
+        run: |
+          docker run -d --name vp -p 8000:8000 \
+            -e DATABASE_URL=sqlite:////tmp/ci.db -e APP_ENV=development \
+            -e SECRET_KEY=ci-only-not-secret -e ADMIN_PASSWORD_HASH=x \
+            viralpilot:ci
+          for i in $(seq 1 30); do curl -sf localhost:8000/healthz && break; sleep 2; done
+          curl -sf localhost:8000/healthz
+          curl -sf localhost:8000/ | grep -qi "<html"
+          docker logs vp | tail -20
