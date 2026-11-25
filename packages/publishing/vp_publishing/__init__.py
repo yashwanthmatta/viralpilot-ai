@@ -98,14 +98,7 @@ class InstagramPublisher(_NotYetApproved):
     )
 
 
-class FacebookPublisher(_NotYetApproved):
-    platform = "facebook"
-    reason = (
-        "Facebook Reels publishing to a Page needs Meta App Review approval for Page publishing "
-        "permissions."
-    )
-
-
+from .facebook import FacebookPublisher  # noqa: E402
 from .youtube import YouTubePublisher  # noqa: E402
 
 REGISTRY: dict[str, Publisher] = {

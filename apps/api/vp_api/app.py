@@ -471,19 +471,26 @@ def patch_account(account_id: int, body: AccountPatch, request: Request) -> dict
 OAUTH_COOKIE = "vp_oauth_state"
 
 
-@app.post("/api/oauth/youtube/start", dependencies=auth)
-def youtube_start(response: Response) -> dict:
-    from vp_publishing import youtube
+def _oauth_module(platform: str):
+    from vp_publishing import facebook, youtube
 
-    if not youtube.configured():
-        raise HTTPException(409, "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and PUBLIC_API_URL first "
-                                 "(see SETUP_REQUIRED.md).")
+    mods = {"youtube": youtube, "facebook": facebook}
+    if platform not in mods:
+        raise HTTPException(404, "no OAuth connect for this platform")
+    return mods[platform]
+
+
+@app.post("/api/oauth/{platform}/start", dependencies=auth)
+def oauth_start(platform: str, response: Response) -> dict:
+    mod = _oauth_module(platform)
+    if not mod.configured():
+        need = ("GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET" if platform == "youtube" else "META_APP_ID, META_APP_SECRET")
+        raise HTTPException(409, f"Set {need} and PUBLIC_API_URL first (see SETUP_REQUIRED.md).")
     nonce = secrets.token_urlsafe(24)
     cfg = get_settings()
     response.set_cookie(OAUTH_COOKIE, nonce, max_age=600, httponly=True, path="/api/oauth",
-                        secure=cfg.app_env != "development",
-                        samesite="lax")
-    return {"url": youtube.auth_url(nonce)}
+                        secure=cfg.app_env != "development", samesite="lax")
+    return {"url": mod.auth_url(nonce)}
 
 
 def _back_to_accounts(**q) -> RedirectResponse:
@@ -527,6 +534,44 @@ def youtube_callback(request: Request, code: str = "", state: str = "", error: s
         s.flush()
         audit(s, request, "account_connected", f"{acc.id} youtube {ch['id']}")
     return _back_to_accounts(connected="youtube")
+
+
+@app.get("/api/oauth/facebook/callback", dependencies=auth)
+def facebook_callback(request: Request, code: str = "", state: str = "", error: str = "") -> RedirectResponse:
+    from vp_publishing import facebook
+    from vp_shared import crypto
+
+    expected = request.cookies.get(OAUTH_COOKIE, "")
+    if not expected or not secrets.compare_digest(expected, state):
+        return _back_to_accounts(error="Sign-in expired or was started elsewhere. Try Connect again.")
+    if error or not code:
+        return _back_to_accounts(error=f"Facebook sign-in was cancelled ({error or 'no code'}).")
+    try:
+        user_token = facebook.exchange_code(code)
+        page_list = facebook.pages(user_token)
+    except Exception as e:  # noqa: BLE001
+        log.warning("facebook oauth failed: %s", type(e).__name__)
+        return _back_to_accounts(error=f"Facebook connection failed: {str(e)[:200]}")
+    if not page_list:
+        return _back_to_accounts(error="No Facebook Page found where you can create content.")
+    with db.session_scope() as s:
+        for pg in page_list:
+            acc = s.execute(select(SocialAccount).where(SocialAccount.platform == "facebook",
+                                                        SocialAccount.external_account_id == pg["id"])).scalar_one_or_none()
+            if acc is None:
+                acc = s.execute(select(SocialAccount).where(SocialAccount.platform == "facebook",
+                                                            SocialAccount.external_account_id == "")
+                                .order_by(SocialAccount.id)).scalars().first()
+            if acc is None:
+                acc = SocialAccount(platform="facebook", max_posts_per_day=1, publishing_allowed=False)
+                s.add(acc)
+            acc.external_account_id, acc.display_name = pg["id"], pg["name"]
+            acc.encrypted_credentials = crypto.encrypt({"page_token": pg["access_token"], "scope": ",".join(facebook.SCOPES)})
+            if acc.health == "paused" and "reconnect" in (acc.health_note or ""):
+                acc.health, acc.health_note = "ok", ""
+            s.flush()
+            audit(s, request, "account_connected", f"{acc.id} facebook page {pg['id']}")
+    return _back_to_accounts(connected="facebook")
 
 
 # ------------------------------------------------------------------ budget

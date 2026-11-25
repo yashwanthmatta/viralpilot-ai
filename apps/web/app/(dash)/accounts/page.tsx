@@ -53,7 +53,7 @@ function AccountsInner() {
                 <td className="text-xs text-muted">{p.reason}</td>
                 <td className="text-right">
                   {p.oauth && p.available && (
-                    <Button size="sm" onClick={() => connect(p.platform)}>Connect {p.platform === "youtube" ? "YouTube" : p.platform}</Button>
+                    <Button size="sm" onClick={() => connect(p.platform)}>Connect {p.platform === "youtube" ? "YouTube" : p.platform === "facebook" ? "Facebook" : p.platform}</Button>
                   )}
                 </td>
               </tr>

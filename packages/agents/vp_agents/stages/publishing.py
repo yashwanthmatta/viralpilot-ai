@@ -88,7 +88,10 @@ def publish_publication(s: Session, job: Job) -> None:
 
     # A previous attempt may have reached the platform and then crashed.
     if pub.status == PublicationStatus.publishing:
-        found = adapter.lookup(account, pub)
+        try:
+            found = adapter.lookup(account, pub)
+        except vp_publishing.PlatformBusy as e:
+            raise RetryLater(str(e), e.retry_s) from e
         if found is NotImplemented:
             pub.status = PublicationStatus.failed
             pub.error = ("previous attempt was interrupted and this platform can't be checked for an "

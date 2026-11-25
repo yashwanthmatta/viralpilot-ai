@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-11-25 (phase 4: YouTube publishing)_
+_Last updated: 2026-11-25 (phase 4b: Facebook Reels)_
 
 ## Acceptance test status
 
@@ -34,8 +34,8 @@ that use fake adapters prove our own safety logic only.
 
 ### Latest local test results
 
-- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **110 passed**
-- `pytest tests/unit` on SQLite: **108 passed**
+- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **114 passed**
+- `pytest tests/unit` on SQLite: **112 passed**
 - Alembic upgrade → downgrade → upgrade and `alembic check` on PostgreSQL 16: clean
 - `ruff check .`: clean · `bandit`: no issues · `pip-audit`: no known vulnerabilities
 - `npm run lint`, `typecheck`, `build`: pass · `npm audit --omit=dev`: 0 vulnerabilities
@@ -92,13 +92,23 @@ that use fake adapters prove our own safety logic only.
 | Publications blocked by a platform keep their place and re-check every 30 min | done | `test_publishing.py` |
 | A real upload to a real channel | **not done**: needs your Google Cloud OAuth client and channel | — |
 
+## Phase 4b — Facebook Reels publishing: done (needs your Meta app)
+
+| Area | State | Evidence |
+|---|---|---|
+| Page connect via Facebook Login; only Pages where you can create content; Page tokens encrypted | done | `test_facebook.py` |
+| Reels Publishing API: start → upload → finish, each step saved (`publications.platform_state`, migration 0004) so a crash resumes instead of posting twice | done | `test_facebook.py` |
+| Confirmed only when Meta reports `publish_status = published`; still-processing reels are re-checked | done | `test_facebook.py` |
+| Reel metrics (plays, comments, shares) | done | `test_facebook.py` |
+| A real reel on a real Page | **not done**: needs your Meta app and Page | — |
+
 ## Remaining phases
 
 | Phase | Scope | Blocked by |
 |---|---|---|
 | 2b — Storage | R2/S3 upload of renders with lifecycle rules | an R2 bucket (cloud deploy only) |
 | 3c — Intelligence | trend signals, niche research, original faceless video generation with TTS | Claude/OpenAI API keys; TTS provider key |
-| 4b — Publishing | Facebook Reels (Graph API), Instagram later, TikTok Content Posting if audited | platform app approvals ([PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md)) |
+| 4c — More platforms | Instagram Reels (same Meta app), TikTok Content Posting if audited | platform app approvals ([PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md)) |
 | 5 — Growth engine | metrics collection, per-dimension performance, controlled experiments (explore/exploit), automatic strategy weights | phase 4 + real published videos |
 | 6 — Cloud deploy | Render (API, worker, Postgres, Key Value, disk) + Vercel | your approval of the monthly cost; account access |
 | 7 — Validation | real end-to-end acceptance run, failure-injection, cost review | phases 2–6 |

@@ -9,7 +9,7 @@ them, and this summary is not legal advice.
 | **YouTube Shorts** | A Google Cloud project with the YouTube Data API v3 and an OAuth client. `youtube.upload` is a sensitive scope: while the OAuth consent screen is in *Testing*, refresh tokens expire after 7 days (reconnect weekly) until Google verifies the app. YouTube's `videos.insert` page (checked 2026-11-25) says uploads from unverified API projects are no longer restricted to private, and that uploads cost 1 unit from a separate Video Uploads bucket with 100 calls/day. | **Integrated** (OAuth, resumable upload, duplicate check, metrics). Needs your Google Cloud OAuth client. |
 | **TikTok** | TikTok for Developers app with the Content Posting API (Direct Post) approved through TikTok's audit. Unaudited apps can only post with private visibility. TikTok's sharing guidelines require showing the creator's info and letting them choose privacy settings and confirm, which may conflict with fully unattended posting. | Likely blocked for unattended public posting. Alternative TikTok allows: upload as a draft to the creator's inbox and finish in the app. |
 | **Instagram Reels** | Instagram professional (Business or Creator) account linked to a Facebook Page, a Meta app, and App Review approval for content-publishing permissions. API-published posts are capped per rolling 24 hours. | Possible after Meta App Review (needs a screencast, privacy policy URL, and business verification for some permissions). |
-| **Facebook Reels** | A Facebook Page you manage, a Meta app, and App Review approval for Page publishing permissions. | Same review process as Instagram; can be requested together. |
+| **Facebook Reels** | A Facebook Page you manage, a Meta app with Facebook Login, and the permissions `pages_show_list`, `pages_read_engagement`, `pages_manage_posts` (`read_insights` for metrics). Before Meta App Review, the app works only for its own admins, developers and testers, which covers your own Page. Meta caps API-published reels at 30 per Page per 24 hours; reels must be 3–90 s, 9:16. | **Integrated** (Page connect, 3-step upload with crash-safe resume, confirmation only when Meta reports `published`, metrics). Needs your Meta app. |
 
 Until a platform's adapter is integrated and connected, it reports itself as blocked, the
 dashboard shows why, and publications to it are marked `blocked` while other
@@ -54,3 +54,8 @@ Campaign marketplaces are never scraped.
 
 - `paidProductPlacementDetails.hasPaidProductPlacement = true` for every campaign clip, plus "Paid partnership with …" and `#ad` in the description.
 - `selfDeclaredMadeForKids = false`; `containsSyntheticMedia` is set for generated (faceless) videos.
+
+### Disclosures the Facebook adapter sends
+
+- "Paid partnership with …" and `#ad` in the reel description for campaign clips. Meta's branded-content tag (naming the sponsor's Page) needs the sponsor's approval in Meta Business Suite and is not set by the API call; do that by hand if a campaign requires it.
+- `is_ai_generated` is set for generated (faceless) videos.

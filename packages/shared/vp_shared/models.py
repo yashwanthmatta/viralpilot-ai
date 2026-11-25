@@ -230,6 +230,9 @@ class Publication(Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str] = mapped_column(Text, default="")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    # Adapter bookkeeping for multi-step uploads (e.g. Facebook's video id
+    # before the reel is published), so a crashed attempt can be checked.
+    platform_state: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class SocialAccount(Base):

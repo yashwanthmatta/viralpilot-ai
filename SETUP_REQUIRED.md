@@ -51,8 +51,14 @@ Only things the system genuinely cannot do for you. Everything else is automated
    5. In the dashboard: Social accounts → **Connect YouTube**, then **Allow publishing**.
    6. While the consent screen is in Testing, Google expires the refresh token after 7 days;
       the dashboard will ask you to reconnect. Submit the app for Google verification to stop that.
-8. **Instagram / Facebook:** Meta developer app, Instagram professional account
-   linked to a Facebook Page, App Review for publishing permissions.
+8. **Facebook Reels:**
+   1. At developers.facebook.com create an app (type Business) and add **Facebook Login**.
+   2. Add the redirect URI `<PUBLIC_API_URL>/api/oauth/facebook/callback` under Facebook Login settings.
+   3. Set `META_APP_ID` and `META_APP_SECRET` as secrets on the host.
+   4. Dashboard: Social accounts → **Connect Facebook**, approve the Page, then **Allow publishing**.
+   5. As the app's admin you can publish to your own Page right away. Meta App Review for
+      `pages_manage_posts` is only needed to connect Pages of people who aren't app admins/testers.
+   Instagram is not integrated yet (it needs the same Meta app plus an Instagram professional account).
 9. **TikTok:** TikTok for Developers app and Content Posting API audit.
 
 See [PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md) for what each one involves.
