@@ -13,7 +13,6 @@ from vp_shared.models import Job
 from . import stage
 
 PENDING_STAGES = {
-    "analytics.publication": ("Phase 5", "Performance metrics collection"),
     "generate.original": ("Phase 7", "Original faceless video generation"),
 }
 

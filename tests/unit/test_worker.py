@@ -31,11 +31,11 @@ def test_success():
 
 def test_unbuilt_stage_blocks_and_reports():
     start_autopilot()
-    jid = _job("analytics.publication")
+    jid = _job("generate.original")
     assert run_job(jid) == "blocked"
     with db.session_scope() as s:
         assert s.get(Job, jid).status == JobStatus.blocked
-        assert s.query(IntegrationBlocker).filter_by(key="stage.analytics.publication").one()
+        assert s.query(IntegrationBlocker).filter_by(key="stage.generate.original").one()
 
 
 def test_budget_exhaustion_waits_without_spending():

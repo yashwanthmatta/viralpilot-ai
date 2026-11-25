@@ -58,6 +58,7 @@ def tick() -> dict:
             a = adapter.availability(acc)
             if a.ok:
                 resolve_blocker(s, f"platform.{acc.platform}")
+                resolve_blocker(s, f"account.{acc.id}.connect")
             else:
                 raise_blocker(s, a.blocker_key, f"{acc.platform}: publishing blocked", a.reason)
 

@@ -42,9 +42,15 @@ Only things the system genuinely cannot do for you. Everything else is automated
 
 ## Before publishing (phase 4)
 
-7. **YouTube:** create a Google Cloud project, enable YouTube Data API v3,
-   configure the OAuth consent screen, then click *Connect* in the dashboard.
-   Apply for the YouTube API compliance audit so uploads can be public.
+7. **YouTube:**
+   1. In Google Cloud Console create a project and enable **YouTube Data API v3**.
+   2. Configure the OAuth consent screen (External) and add yourself as a test user.
+   3. Create an OAuth client of type **Web application** with the redirect URI
+      `<PUBLIC_API_URL>/api/oauth/youtube/callback`.
+   4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `PUBLIC_API_URL` as secrets on the host.
+   5. In the dashboard: Social accounts → **Connect YouTube**, then **Allow publishing**.
+   6. While the consent screen is in Testing, Google expires the refresh token after 7 days;
+      the dashboard will ask you to reconnect. Submit the app for Google verification to stop that.
 8. **Instagram / Facebook:** Meta developer app, Instagram professional account
    linked to a Facebook Page, App Review for publishing permissions.
 9. **TikTok:** TikTok for Developers app and Content Posting API audit.

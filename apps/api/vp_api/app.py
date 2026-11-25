@@ -5,14 +5,16 @@ invented here. Fields with no data source yet (e.g. revenue) return null.
 """
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from typing import Literal
 
 import vp_publishing
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 from sqlalchemy import func, select
 from vp_agents import rights
@@ -55,6 +57,7 @@ from vp_api.security import (
     verify_password,
 )
 
+log = logging.getLogger("viralpilot.api")
 PLATFORMS = ("youtube", "tiktok", "instagram", "facebook")
 
 
@@ -432,7 +435,9 @@ def list_accounts() -> list[dict]:
             out.append({"id": a.id, "platform": a.platform, "name": a.display_name,
                         "connected": bool(a.encrypted_credentials),
                         "publishing_allowed": a.publishing_allowed, "max_posts_per_day": a.max_posts_per_day,
-                        "can_publish": bool(av and av.ok), "blocked_reason": av.reason if av and not av.ok else ""})
+                        "can_publish": bool(av and av.ok), "blocked_reason": av.reason if av and not av.ok else "",
+                        "health": a.health, "health_note": a.health_note,
+                        "oauth": bool(adapter and adapter.oauth)})
         return out
 
 
@@ -459,6 +464,69 @@ def patch_account(account_id: int, body: AccountPatch, request: Request) -> dict
             a.publishing_allowed = body.publishing_allowed
         audit(s, request, "account_changed", f"{account_id}: {body.model_dump(exclude_none=True)}")
         return {"ok": True}
+
+
+# ------------------------------------------------------------------- oauth
+
+OAUTH_COOKIE = "vp_oauth_state"
+
+
+@app.post("/api/oauth/youtube/start", dependencies=auth)
+def youtube_start(response: Response) -> dict:
+    from vp_publishing import youtube
+
+    if not youtube.configured():
+        raise HTTPException(409, "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and PUBLIC_API_URL first "
+                                 "(see SETUP_REQUIRED.md).")
+    nonce = secrets.token_urlsafe(24)
+    cfg = get_settings()
+    response.set_cookie(OAUTH_COOKIE, nonce, max_age=600, httponly=True, path="/api/oauth",
+                        secure=cfg.app_env != "development",
+                        samesite="lax")
+    return {"url": youtube.auth_url(nonce)}
+
+
+def _back_to_accounts(**q) -> RedirectResponse:
+    from urllib.parse import urlencode
+
+    r = RedirectResponse(get_settings().web_origin.rstrip("/") + "/accounts?" + urlencode(q), status_code=303)
+    r.delete_cookie(OAUTH_COOKIE, path="/api/oauth")
+    return r
+
+
+@app.get("/api/oauth/youtube/callback", dependencies=auth)
+def youtube_callback(request: Request, code: str = "", state: str = "", error: str = "") -> RedirectResponse:
+    from vp_publishing import youtube
+    from vp_shared import crypto
+
+    expected = request.cookies.get(OAUTH_COOKIE, "")
+    if not expected or not secrets.compare_digest(expected, state):
+        return _back_to_accounts(error="Sign-in expired or was started elsewhere. Try Connect again.")
+    if error or not code:
+        return _back_to_accounts(error=f"Google sign-in was cancelled ({error or 'no code'}).")
+    try:
+        tokens = youtube.exchange_code(code)
+        ch = youtube.channel_info(tokens["access_token"])
+    except Exception as e:  # noqa: BLE001 - shown to the owner, tokens are never included
+        log.warning("youtube oauth failed: %s", type(e).__name__)
+        return _back_to_accounts(error=f"YouTube connection failed: {str(e)[:200]}")
+    with db.session_scope() as s:
+        acc = s.execute(select(SocialAccount).where(SocialAccount.platform == "youtube",
+                                                    SocialAccount.external_account_id == ch["id"])).scalar_one_or_none()
+        if acc is None:  # attach to a placeholder row the owner created for YouTube, if any
+            acc = s.execute(select(SocialAccount).where(SocialAccount.platform == "youtube",
+                                                        SocialAccount.external_account_id == "")
+                            .order_by(SocialAccount.id)).scalars().first()
+        if acc is None:
+            acc = SocialAccount(platform="youtube", max_posts_per_day=1, publishing_allowed=False)
+            s.add(acc)
+        acc.external_account_id, acc.display_name = ch["id"], ch["title"]
+        acc.encrypted_credentials = crypto.encrypt({**tokens, "uploads": ch["uploads"]})
+        if acc.health == "paused" and "reconnect" in (acc.health_note or ""):
+            acc.health, acc.health_note = "ok", ""
+        s.flush()
+        audit(s, request, "account_connected", f"{acc.id} youtube {ch['id']}")
+    return _back_to_accounts(connected="youtube")
 
 
 # ------------------------------------------------------------------ budget
@@ -499,8 +567,9 @@ def platforms() -> list[dict]:
     out = []
     for p in PLATFORMS:
         adapter = vp_publishing.get(p)
-        av = adapter.availability(SocialAccount(platform=p)) if adapter else None
-        out.append({"platform": p, "available": bool(av and av.ok), "reason": av.reason if av else "no adapter"})
+        av = adapter.platform_status() if adapter else None
+        out.append({"platform": p, "available": bool(av and av.ok), "reason": av.reason if av else "no adapter",
+                    "oauth": bool(adapter and adapter.oauth)})
     return out
 
 

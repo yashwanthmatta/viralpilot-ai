@@ -121,9 +121,9 @@ def test_permission_switch_respected(adapter):
 
 def test_unapproved_platform_is_blocked_not_attempted():
     [(pid, jid)] = _setup(platform="tiktok")
-    run_job(jid)
+    assert run_job(jid) == "blocked"
     p = _pub(pid)
-    assert p.status == PublicationStatus.blocked and "audit" in p.error
+    assert p.status == PublicationStatus.scheduled and "audit" in p.error  # keeps its place, re-checks later
     with db.session_scope() as s:
         assert s.query(IntegrationBlocker).filter_by(key="platform.tiktok").one()
 

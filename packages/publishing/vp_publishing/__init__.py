@@ -37,8 +37,25 @@ class PublishUnconfirmed(Exception):
     """The platform call returned without a post id."""
 
 
+class PlatformBusy(Exception):
+    """Quota or rate limit: try again later. Nothing was posted."""
+
+    def __init__(self, msg: str, retry_s: int = 3600):
+        super().__init__(msg)
+        self.retry_s = retry_s
+
+
+class AccountNeedsReconnect(Exception):
+    """The owner revoked access or the token expired."""
+
+
 class Publisher:
     platform = "base"
+    oauth = False  # True when the dashboard can start an OAuth connect for this platform
+
+    def platform_status(self) -> Availability:
+        """Platform-level answer (no specific account)."""
+        return self.availability(SocialAccount(platform=self.platform))
 
     def availability(self, account: SocialAccount) -> Availability:
         raise NotImplementedError
@@ -47,6 +64,10 @@ class Publisher:
         raise NotImplementedError
 
     def lookup(self, account: SocialAccount, pub: Publication):
+        return NotImplemented
+
+    def stats(self, account: SocialAccount, post_ids: list[str]):
+        """{post_id: {"views": int, "likes": int, "comments": int}} or NotImplemented."""
         return NotImplemented
 
 
@@ -58,15 +79,6 @@ class _NotYetApproved(Publisher):
 
     def availability(self, account: SocialAccount) -> Availability:
         return Availability(False, f"platform.{self.platform}", self.reason)
-
-
-class YouTubePublisher(_NotYetApproved):
-    platform = "youtube"
-    reason = (
-        "YouTube upload adapter ships in phase 5 (OAuth + videos.insert). Note: uploads from an "
-        "unaudited Google API project are locked to private until the project passes YouTube's "
-        "API compliance audit, and the default quota allows only a handful of uploads a day."
-    )
 
 
 class TikTokPublisher(_NotYetApproved):
@@ -93,6 +105,8 @@ class FacebookPublisher(_NotYetApproved):
         "permissions."
     )
 
+
+from .youtube import YouTubePublisher  # noqa: E402
 
 REGISTRY: dict[str, Publisher] = {
     p.platform: p for p in (YouTubePublisher(), TikTokPublisher(), InstagramPublisher(), FacebookPublisher())

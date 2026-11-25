@@ -1,6 +1,6 @@
 # Development status
 
-_Last updated: 2026-11-25 (phase 3b: QC, metadata, scheduling)_
+_Last updated: 2026-11-25 (phase 4: YouTube publishing)_
 
 ## Acceptance test status
 
@@ -34,8 +34,8 @@ that use fake adapters prove our own safety logic only.
 
 ### Latest local test results
 
-- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **101 passed**
-- `pytest tests/unit` on SQLite: **99 passed**
+- `pytest tests` on PostgreSQL 16 + real Redis + real Celery worker: **110 passed**
+- `pytest tests/unit` on SQLite: **108 passed**
 - Alembic upgrade → downgrade → upgrade and `alembic check` on PostgreSQL 16: clean
 - `ruff check .`: clean · `bandit`: no issues · `pip-audit`: no known vulnerabilities
 - `npm run lint`, `typecheck`, `build`: pass · `npm audit --omit=dev`: 0 vulnerabilities
@@ -79,13 +79,26 @@ that use fake adapters prove our own safety logic only.
 | Blocked jobs re-check themselves every 30 min and clear their dashboard blocker when they succeed | done | `test_worker.py` |
 | Video library: in-browser preview (served only from `MEDIA_DIR`, login required), QC results, hook, description, cost | done | `test_revenue_api.py`, `next build` |
 
+## Phase 4 — YouTube publishing: done (needs your Google OAuth client)
+
+| Area | State | Evidence |
+|---|---|---|
+| OAuth connect (state cookie, offline access), tokens encrypted with `CREDENTIALS_KEY`, automatic refresh | done | `test_youtube.py` |
+| Resumable `videos.insert`; published only when YouTube returns the video id | done | `test_youtube.py` (mocked Google API) |
+| Duplicate protection: interrupted uploads are found by their `vp-…` tag before any retry | done | `test_youtube.py` |
+| Paid placement flag on campaign clips | done | `test_youtube.py` |
+| Quota exceeded waits 6 h; revoked access pauses the account and asks for reconnect | done | `test_youtube.py` |
+| Metrics at 1 h, 24 h, 72 h, 7 d, 30 d from `videos.list` statistics | done | `test_youtube.py` |
+| Publications blocked by a platform keep their place and re-check every 30 min | done | `test_publishing.py` |
+| A real upload to a real channel | **not done**: needs your Google Cloud OAuth client and channel | — |
+
 ## Remaining phases
 
 | Phase | Scope | Blocked by |
 |---|---|---|
 | 2b — Storage | R2/S3 upload of renders with lifecycle rules | an R2 bucket (cloud deploy only) |
 | 3c — Intelligence | trend signals, niche research, original faceless video generation with TTS | Claude/OpenAI API keys; TTS provider key |
-| 4 — Publishing | OAuth (connect, encrypted storage, refresh), YouTube `videos.insert` + lookup, Instagram/Facebook Graph publishing, TikTok Content Posting, schedule optimiser | platform app approvals ([PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md)) |
+| 4b — Publishing | Facebook Reels (Graph API), Instagram later, TikTok Content Posting if audited | platform app approvals ([PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md)) |
 | 5 — Growth engine | metrics collection, per-dimension performance, controlled experiments (explore/exploit), automatic strategy weights | phase 4 + real published videos |
 | 6 — Cloud deploy | Render (API, worker, Postgres, Key Value, disk) + Vercel | your approval of the monthly cost; account access |
 | 7 — Validation | real end-to-end acceptance run, failure-injection, cost review | phases 2–6 |

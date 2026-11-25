@@ -6,12 +6,12 @@ them, and this summary is not legal advice.
 
 | Platform | What's needed for unattended publishing | Practical impact |
 |---|---|---|
-| **YouTube Shorts** | A Google Cloud project with the YouTube Data API v3 and OAuth consent screen. Uploads from unverified/unaudited API projects are locked to **private** until the project passes YouTube's API compliance audit. Default quota is 10,000 units/day; an upload costs about 1,600, so roughly 6 uploads/day before a quota increase. | Most promising first target. Publishing works for testing right away (as private); public posts after the audit. |
+| **YouTube Shorts** | A Google Cloud project with the YouTube Data API v3 and an OAuth client. `youtube.upload` is a sensitive scope: while the OAuth consent screen is in *Testing*, refresh tokens expire after 7 days (reconnect weekly) until Google verifies the app. YouTube's `videos.insert` page (checked 2026-11-25) says uploads from unverified API projects are no longer restricted to private, and that uploads cost 1 unit from a separate Video Uploads bucket with 100 calls/day. | **Integrated** (OAuth, resumable upload, duplicate check, metrics). Needs your Google Cloud OAuth client. |
 | **TikTok** | TikTok for Developers app with the Content Posting API (Direct Post) approved through TikTok's audit. Unaudited apps can only post with private visibility. TikTok's sharing guidelines require showing the creator's info and letting them choose privacy settings and confirm, which may conflict with fully unattended posting. | Likely blocked for unattended public posting. Alternative TikTok allows: upload as a draft to the creator's inbox and finish in the app. |
 | **Instagram Reels** | Instagram professional (Business or Creator) account linked to a Facebook Page, a Meta app, and App Review approval for content-publishing permissions. API-published posts are capped per rolling 24 hours. | Possible after Meta App Review (needs a screencast, privacy policy URL, and business verification for some permissions). |
 | **Facebook Reels** | A Facebook Page you manage, a Meta app, and App Review approval for Page publishing permissions. | Same review process as Instagram; can be requested together. |
 
-Until approval, the adapter for each platform reports itself as blocked, the
+Until a platform's adapter is integrated and connected, it reports itself as blocked, the
 dashboard shows why, and publications to it are marked `blocked` while other
 platforms continue.
 
@@ -49,3 +49,8 @@ Campaign marketplaces are never scraped.
 - YouTube's Partner Program excludes reused content without significant
   original contribution, so clip channels rely on campaign payouts first.
 - Facebook Content Monetization is invite-only.
+
+### Disclosures the YouTube adapter sends
+
+- `paidProductPlacementDetails.hasPaidProductPlacement = true` for every campaign clip, plus "Paid partnership with …" and `#ad` in the description.
+- `selfDeclaredMadeForKids = false`; `containsSyntheticMedia` is set for generated (faceless) videos.

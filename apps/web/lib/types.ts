@@ -43,8 +43,8 @@ export type ClipRow = {
 };
 export type Pub = { id: number; clip_id: number; platform: string; status: string; scheduled_for: string | null; confirmed_at: string | null; platform_post_id: string; url: string; error: string };
 export type SourceRow = { id: number; name: string; kind: string; url: string; license: string; rights_evidence: string; attribution: string; niche: string; enabled: boolean; last_polled_at: string | null };
-export type Account = { id: number; platform: string; name: string; connected: boolean; publishing_allowed: boolean; max_posts_per_day: number; can_publish: boolean; blocked_reason: string };
-export type Platform = { platform: string; available: boolean; reason: string };
+export type Account = { id: number; platform: string; name: string; connected: boolean; publishing_allowed: boolean; max_posts_per_day: number; can_publish: boolean; blocked_reason: string; health: string; health_note: string; oauth: boolean };
+export type Platform = { platform: string; available: boolean; reason: string; oauth: boolean };
 export type JobRow = { id: number; kind: string; status: string; attempts: number; max_attempts: number; run_after: string; last_error: string; created_at: string };
 export type Budget = { daily_limit_usd: number; monthly_limit_usd: number; per_item_limit_usd: number; max_videos_per_day: number; total_limit_usd: number; max_videos_ceiling: number };
 export type Costs = {
