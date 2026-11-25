@@ -29,7 +29,7 @@ quality-check, publish and learn without a browser or laptop being on.
 ## Architecture
 
 ```
- apps/web (Next.js, Vercel)  ──HTTPS + session cookie──▶  apps/api (FastAPI)
+ apps/web (Next.js static, served by the API) ──same-origin cookie──▶ apps/api (FastAPI)
                                                               │
                                                      PostgreSQL (source of truth)
                                                               ▲
@@ -55,6 +55,8 @@ quality-check, publish and learn without a browser or laptop being on.
 
 How the pipeline survives failures: [docs/architecture.md](docs/architecture.md).
 Platform approval requirements: [PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md).
+Money: [REVENUE_STRATEGY.md](REVENUE_STRATEGY.md) · [BUSINESS_REVIEW.md](BUSINESS_REVIEW.md).
+Proof: [TEST_RESULTS.md](TEST_RESULTS.md) · Hosting and cost: [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Run it locally
 

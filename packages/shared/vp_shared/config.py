@@ -31,6 +31,11 @@ class Settings:
     secret_key: str = field(default_factory=lambda: os.environ.get("SECRET_KEY", ""))
     # Exact origin of the Next.js dashboard, for CORS (e.g. https://viralpilot.vercel.app).
     web_origin: str = field(default_factory=lambda: os.environ.get("WEB_ORIGIN", "http://localhost:3000"))
+    # "lax" when the API serves the dashboard itself (same origin, recommended);
+    # "none" only for a dashboard on another site (needs third-party cookies).
+    cookie_samesite: str = field(default_factory=lambda: os.environ.get("COOKIE_SAMESITE", "lax").lower())
+    # Static dashboard export the API serves at / (built into the Docker image).
+    web_dist: str = field(default_factory=lambda: os.environ.get("WEB_DIST", ""))
     session_hours: int = field(default_factory=lambda: _int("SESSION_HOURS", 12))
     credentials_key: str = field(default_factory=lambda: os.environ.get("CREDENTIALS_KEY", ""))
     media_dir: str = field(default_factory=lambda: os.environ.get("MEDIA_DIR", "./media"))

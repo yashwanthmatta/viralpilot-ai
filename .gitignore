@@ -7,3 +7,5 @@ media/
 .env
 .pytest_cache/
 *.egg-info/
+dump.rdb
+*.rdb

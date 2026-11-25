@@ -1,83 +1,58 @@
-# Render Blueprint for the always-on backend. NOT applied automatically:
-# you create it in the Render dashboard (Blueprints > New Blueprint Instance)
-# after reviewing the cost. Background workers have no free tier.
-# The dashboard (apps/web) deploys separately to Vercel.
+# Recommended Render Blueprint: one always-on service runs the API, the
+# dashboard (static files served by the API), the worker and the scheduler
+# (scripts/run_all.sh), with a disk for media.
+# NOT applied automatically. Create it yourself in the Render dashboard
+# (Blueprints > New Blueprint Instance) after approving the cost in DEPLOYMENT.md.
 services:
   - type: web
-    name: viralpilot-api
+    name: viralpilot
     runtime: docker
     dockerfilePath: ./infrastructure/docker/backend.Dockerfile
     dockerContext: .
-    plan: starter
+    dockerCommand: sh scripts/run_all.sh
+    plan: standard          # 1 CPU / 2 GB: enough for faster-whisper base.en + 1080p FFmpeg
     healthCheckPath: /healthz
     preDeployCommand: alembic upgrade head
     autoDeploy: false
+    disk: { name: media, mountPath: /data, sizeGB: 10 }
     envVars:
-      - key: APP_ENV
-        value: production
+      - { key: APP_ENV, value: production }
       - key: DATABASE_URL
         fromDatabase: { name: viralpilot-db, property: connectionString }
       - key: REDIS_URL
         fromService: { type: keyvalue, name: viralpilot-queue, property: connectionString }
+      - { key: MEDIA_DIR, value: /data/media }
       - { key: ADMIN_PASSWORD_HASH, sync: false }
       - { key: SECRET_KEY, sync: false }
       - { key: CREDENTIALS_KEY, sync: false }
+      - { key: PUBLIC_API_URL, sync: false }   # https://<service>.onrender.com
+      - { key: WEB_ORIGIN, sync: false }       # same value as PUBLIC_API_URL
       - { key: GOOGLE_CLIENT_ID, sync: false }
       - { key: GOOGLE_CLIENT_SECRET, sync: false }
-      - { key: PUBLIC_API_URL, sync: false }
       - { key: META_APP_ID, sync: false }
       - { key: META_APP_SECRET, sync: false }
-      - { key: WEB_ORIGIN, sync: false }
-      - { key: DAILY_LIMIT_USD, value: "3" }
-      - { key: MONTHLY_LIMIT_USD, value: "90" }
-      - { key: TOTAL_LIMIT_USD, value: "100" }
-      - { key: PER_VIDEO_LIMIT_USD, value: "0.50" }
-      - { key: MAX_VIDEOS_PER_DAY, value: "3" }
-      - { key: MAX_VIDEOS_CEILING, value: "5" }
-
-  - type: worker
-    name: viralpilot-worker
-    runtime: docker
-    dockerfilePath: ./infrastructure/docker/backend.Dockerfile
-    dockerContext: .
-    dockerCommand: celery -A vp_worker.celery_app worker -B --loglevel=INFO --concurrency=1
-    plan: starter
-    autoDeploy: false
-    disk: { name: media, mountPath: /data, sizeGB: 10 }
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase: { name: viralpilot-db, property: connectionString }
-      - key: REDIS_URL
-        fromService: { type: keyvalue, name: viralpilot-queue, property: connectionString }
-      - { key: CREDENTIALS_KEY, sync: false }
-      - { key: GOOGLE_CLIENT_ID, sync: false }
-      - { key: GOOGLE_CLIENT_SECRET, sync: false }
-      - { key: PUBLIC_API_URL, sync: false }
-      - { key: META_APP_ID, sync: false }
-      - { key: META_APP_SECRET, sync: false }
-      - { key: MEDIA_DIR, value: /data/media }
-      - { key: DAILY_LIMIT_USD, value: "3" }
-      - { key: MONTHLY_LIMIT_USD, value: "90" }
-      - { key: TOTAL_LIMIT_USD, value: "100" }
-      - { key: PER_VIDEO_LIMIT_USD, value: "0.50" }
-      - { key: MAX_VIDEOS_PER_DAY, value: "3" }
-      - { key: MAX_VIDEOS_CEILING, value: "5" }
+      - { key: ANTHROPIC_API_KEY, sync: false }
+      - { key: METADATA_MODEL, value: claude-opus-5-5 }
       - { key: WHOP_ACCESS_TOKEN, sync: false }
       - { key: OPERATOR_COUNTRY, sync: false }
       - { key: CAMPAIGN_FEED_URLS, sync: false }
       - { key: MAX_ACTIVE_CAMPAIGNS, value: "3" }
-      - { key: ANTHROPIC_API_KEY, sync: false }
-      - { key: METADATA_MODEL, value: claude-opus-5-5 }
+      - { key: DAILY_LIMIT_USD, value: "3" }
+      - { key: MONTHLY_LIMIT_USD, value: "90" }
+      - { key: TOTAL_LIMIT_USD, value: "100" }
+      - { key: PER_VIDEO_LIMIT_USD, value: "0.50" }
+      - { key: MAX_VIDEOS_PER_DAY, value: "3" }
+      - { key: MAX_VIDEOS_CEILING, value: "5" }
 
+  # Queue wake-ups only. The database is the source of truth, so the free
+  # plan is acceptable: losing Redis never loses a job.
   - type: keyvalue
     name: viralpilot-queue
-    plan: starter
+    plan: free
     maxmemoryPolicy: noeviction
     ipAllowList: []
 
 databases:
   - name: viralpilot-db
     plan: basic-256mb
-    ipAllowList: []
+    postgresMajorVersion: "16"

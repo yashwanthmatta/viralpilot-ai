@@ -68,7 +68,8 @@ def issue_session(response: Response) -> None:
     token = _signer().sign(b"admin").decode()
     response.set_cookie(
         COOKIE, token, max_age=cfg.session_hours * 3600, httponly=True,
-        secure=cfg.app_env != "development", samesite="none" if cfg.app_env != "development" else "lax",
+        secure=cfg.app_env != "development",
+        samesite="none" if cfg.cookie_samesite == "none" and cfg.app_env != "development" else "lax",
         path="/",
     )
 

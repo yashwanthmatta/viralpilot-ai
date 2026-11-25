@@ -807,3 +807,34 @@ def finance_overview() -> dict:
     with db.session_scope() as s:
         return {"overview": finance.overview(s), "breakdown": finance.by_dimension(s),
                 "milestones": finance.milestone_plan(s), "last_14d": finance.last_14d(s)}
+
+
+
+# --------------------------------------------------------- dashboard (static)
+# In the single-service deployment the API also serves the dashboard, so the
+# browser talks to one origin: no CORS, no third-party cookies.
+
+_DASHBOARD_HEADERS = {
+    "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": ("default-src 'self'; connect-src 'self'; img-src 'self' data: https:; "
+                                "media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+                                "frame-ancestors 'none'"),
+}
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        for k, v in _DASHBOARD_HEADERS.items():
+            response.headers.setdefault(k, v)
+    else:
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    return response
+
+
+_dist = get_settings().web_dist
+if _dist and os.path.isdir(_dist):
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="dashboard")

@@ -110,7 +110,7 @@ that use fake adapters prove our own safety logic only.
 | 3c — Intelligence | trend signals, niche research, original faceless video generation with TTS | Claude/OpenAI API keys; TTS provider key |
 | 4c — More platforms | Instagram Reels (same Meta app), TikTok Content Posting if audited | platform app approvals ([PLATFORM_COMPLIANCE.md](PLATFORM_COMPLIANCE.md)) |
 | 5 — Growth engine | metrics collection, per-dimension performance, controlled experiments (explore/exploit), automatic strategy weights | phase 4 + real published videos |
-| 6 — Cloud deploy | Render (API, worker, Postgres, Key Value, disk) + Vercel | your approval of the monthly cost; account access |
+| 6 — Cloud deploy | packaged: one Render service (API + dashboard + worker + scheduler), Postgres, Key Value, disk; see DEPLOYMENT.md | your approval of ≈ $33.50/month; your Render account |
 | 7 — Validation | real end-to-end acceptance run, failure-injection, cost review | phases 2–6 |
 
 ## Known limitations
