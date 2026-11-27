@@ -14,6 +14,17 @@ a card.
 | Transcription | faster-whisper on the server | faster-whisper `base.en` on the GitHub runner |
 | Hooks/titles | Claude (≈ $0.03/video) | **built-in rules writer** (free). Add `ANTHROPIC_API_KEY` later if you want Claude |
 
+## Keys and password without scripts
+
+If `SECRET_KEY` and `CREDENTIALS_KEY` aren't set, the app makes strong random
+keys on first start and keeps them in the database, so the dashboard and the
+GitHub worker share them automatically. The trade-off is that anyone with a
+copy of the database could also decrypt the stored platform tokens. Setting
+both as host secrets keeps the key separate from the data.
+
+For login you can set `ADMIN_PASSWORD` (your own password, at least 10
+characters) instead of a hash.
+
 ## Trade-offs, plainly
 
 - **Slower.** Work happens in bursts every 3 hours, not continuously. A new

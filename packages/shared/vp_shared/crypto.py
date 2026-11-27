@@ -10,18 +10,18 @@ import json
 
 from cryptography.fernet import Fernet
 
-from vp_shared.config import get_settings
-
 
 class CredentialsKeyMissing(RuntimeError):
     pass
 
 
 def _fernet() -> Fernet:
-    key = get_settings().credentials_key
-    if not key:
-        raise CredentialsKeyMissing("CREDENTIALS_KEY is not set")
-    return Fernet(key.encode())
+    from vp_shared import keys
+
+    try:
+        return Fernet(keys.fernet_key())
+    except Exception as e:  # noqa: BLE001 - no env key and no database
+        raise CredentialsKeyMissing(f"no credentials key available: {e}") from e
 
 
 def encrypt(data: dict) -> str:

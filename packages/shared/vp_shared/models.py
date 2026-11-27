@@ -322,6 +322,16 @@ class IntegrationBlocker(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class AppSecret(Base):
+    """Keys generated on first boot when they aren't supplied as env vars
+    (free-tier setup). Env vars always take precedence."""
+
+    __tablename__ = "app_secrets"
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class AuditLog(Base):
     """Security-relevant actions: logins, autopilot on/off, setting changes."""
 

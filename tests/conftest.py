@@ -14,6 +14,10 @@ def fresh_db(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD_HASH", TEST_HASH)
     monkeypatch.setenv("SECRET_KEY", "x" * 40)
     monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    from vp_shared import keys
+
+    keys.reset_cache()
     monkeypatch.setenv("DAILY_LIMIT_USD", "1.00")
     monkeypatch.delenv("WHOP_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("CAMPAIGN_FEED_URLS", raising=False)

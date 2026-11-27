@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import os
 import time
 from collections import defaultdict, deque
 
@@ -32,9 +33,11 @@ def hash_password(pw: str) -> str:
 
 
 def _signer() -> TimestampSigner:
-    key = get_settings().secret_key
+    from vp_shared import keys
+
+    key = keys.secret_key()
     if len(key) < 32:
-        raise HTTPException(503, "SECRET_KEY is missing or shorter than 32 characters")
+        raise HTTPException(503, "SECRET_KEY is shorter than 32 characters")
     return TimestampSigner(key, salt="vp-session")
 
 
@@ -53,10 +56,25 @@ def check_rate_limit(ip: str) -> None:
     q.append(now)
 
 
+_plain_hash: dict[str, str] = {}
+
+
+def _plain_password_hash() -> str:
+    """ADMIN_PASSWORD (plain, set as a host secret) is hashed in memory on
+    first use, so a free setup needs no hashing script. Minimum 10 characters."""
+    pw = os.environ.get("ADMIN_PASSWORD", "")
+    if len(pw) < 10:
+        return ""
+    if _plain_hash.get("pw") != pw:
+        _plain_hash.clear()
+        _plain_hash["pw"], _plain_hash["hash"] = pw, _ph.hash(pw)
+    return _plain_hash["hash"]
+
+
 def verify_password(pw: str) -> bool:
-    h = get_settings().admin_password_hash
+    h = get_settings().admin_password_hash or _plain_password_hash()
     if not h:
-        raise HTTPException(503, "ADMIN_PASSWORD_HASH is not set; login disabled")
+        raise HTTPException(503, "Set ADMIN_PASSWORD (or ADMIN_PASSWORD_HASH) on the host; login disabled")
     try:
         return _ph.verify(h, pw)
     except (VerifyMismatchError, InvalidHashError):
