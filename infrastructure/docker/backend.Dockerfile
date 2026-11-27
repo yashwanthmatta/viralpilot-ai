@@ -19,10 +19,10 @@ COPY packages ./packages
 COPY apps/api ./apps/api
 COPY apps/worker ./apps/worker
 COPY migrations ./migrations
-COPY scripts/run_all.sh ./scripts/run_all.sh
+COPY scripts/run_all.sh scripts/start_web.sh ./scripts/
 RUN pip install ".[ml]"
 USER app
 COPY --from=web /web/out ./web
 ENV MEDIA_DIR=/data/media WEB_DIST=/app/web
 EXPOSE 8000
-CMD ["uvicorn", "vp_api.app:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+CMD ["sh", "scripts/start_web.sh"]

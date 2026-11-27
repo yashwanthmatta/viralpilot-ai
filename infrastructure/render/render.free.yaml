@@ -11,7 +11,7 @@ services:
     runtime: docker
     dockerfilePath: ./infrastructure/docker/backend.Dockerfile
     dockerContext: .
-    dockerCommand: sh -c 'uvicorn vp_api.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers'
+    dockerCommand: sh scripts/start_web.sh
     plan: free
     healthCheckPath: /healthz
     autoDeploy: false
